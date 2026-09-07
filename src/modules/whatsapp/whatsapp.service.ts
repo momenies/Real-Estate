@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MessageDirection, MessageStatus, OfficeStatus } from '@prisma/client';
+import { MessageDirection, MessageStatus, OfficeStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TenantStore } from '../../common/tenancy/tenant-context';
 import { OfficesService } from '../offices/offices.service';
@@ -94,16 +94,41 @@ export class WhatsappService {
 
   /**
    * Inserts the idempotency row. A duplicate insert means another delivery of
-   * the same event is already handled, so this one stops here.
+   * the same event is already being handled, so this one stops here.
+   *
+   * Only the unique-constraint violation counts as "already claimed". Anything
+   * else - a dropped connection, a full disk - must surface: swallowing it
+   * would silently discard a customer's message and look identical to a
+   * routine Meta retry.
    */
   private async claimEvent(externalId: string, payload: unknown): Promise<boolean> {
+    // Meta redelivers constantly, so the common retry is settled with a cheap
+    // indexed lookup. Letting every one of them fail the unique constraint
+    // instead would print a Prisma error on a completely normal path, and
+    // teach whoever reads the logs to ignore real ones.
+    const seen = await this.prisma.webhookEvent.findUnique({
+      where: { provider_externalId: { provider: 'whatsapp', externalId } },
+      select: { id: true },
+    });
+    if (seen) return false;
+
     try {
       await this.prisma.webhookEvent.create({
         data: { provider: 'whatsapp', externalId, payload: payload as object },
       });
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        // Two deliveries raced; the other one won and is handling it.
+        return false;
+      }
+      this.logger.error(
+        `Could not claim webhook event ${externalId}: ${(error as Error).message}`,
+      );
+      throw error;
     }
   }
 
