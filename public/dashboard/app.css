@@ -1,0 +1,281 @@
+/* ---------------------------------------------------------------------------
+   Network dashboard - the platform owner's only screen.
+
+   Colour roles come from the validated data-viz palette. Data marks use ONE
+   hue: these are single-series magnitude charts, so bar length carries the
+   value and colour carries nothing - which is why no categorical palette (and
+   no colour-blindness adjacency problem) exists here at all.
+   Status colours are the fixed status palette and always ship with an icon and
+   a label, never colour alone.
+--------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+  --plane: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --mark: #2a78d6; /* single-series bar hue - validated >= 3:1 on this surface */
+  --mark-soft: #cde2fb;
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.05);
+  --radius: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --plane: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --mark: #3987e5; /* dark-surface step, validated separately */
+    --mark-soft: #184f95;
+    --shadow: none;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --plane: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --mark: #3987e5;
+  --mark-soft: #184f95;
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+
+/* `hidden` must beat the layout rules below - `.view { display: flex }` and
+   `.login { display: grid }` are more specific than the UA stylesheet, so
+   without this every view renders at once. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--plane);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+h1, h2 { margin: 0; font-weight: 600; }
+h1 { font-size: 1.35rem; }
+h2 { font-size: 1rem; }
+.muted { color: var(--muted); }
+.error { color: var(--critical); }
+
+/* ── login ───────────────────────────────────────────────────────────── */
+.login { display: grid; place-items: center; min-height: 100vh; padding: 24px; }
+.login-card {
+  width: min(380px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.login-card h1 { margin-bottom: 2px; }
+.login-card p { margin: 0 0 12px; font-size: 0.9rem; }
+.login-card label { font-size: 0.85rem; color: var(--ink-2); margin-top: 8px; }
+
+input, select, button {
+  font: inherit;
+  color: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 9px 11px;
+}
+input:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 2px solid var(--mark);
+  outline-offset: 1px;
+}
+button { cursor: pointer; }
+button[type='submit'], .primary {
+  margin-top: 16px;
+  background: var(--mark);
+  border-color: var(--mark);
+  color: #fff;
+  font-weight: 600;
+}
+button[disabled] { opacity: 0.6; cursor: progress; }
+.ghost { background: transparent; }
+.ghost:hover { background: var(--grid); }
+
+/* ── chrome ──────────────────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.brand { display: flex; gap: 8px; align-items: baseline; }
+.tabs { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+.tab {
+  border: 0;
+  background: transparent;
+  padding: 7px 13px;
+  border-radius: 8px;
+  color: var(--ink-2);
+}
+.tab:hover { background: var(--grid); }
+.tab[aria-selected='true'] { background: var(--mark); color: #fff; font-weight: 600; }
+.topbar-actions { display: flex; gap: 6px; }
+
+.banner {
+  margin: 12px 20px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--critical);
+  color: var(--critical);
+  background: transparent;
+}
+
+.view { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.card-note { margin: 4px 0 14px; font-size: 0.85rem; }
+.grid-2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.inline { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+
+/* ── hero + stat tiles ───────────────────────────────────────────────── */
+.hero-row { display: grid; gap: 16px; grid-template-columns: minmax(240px, 1fr) 3fr; }
+@media (max-width: 860px) { .hero-row { grid-template-columns: 1fr; } }
+
+.hero {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  box-shadow: var(--shadow);
+}
+.hero-label { color: var(--ink-2); font-size: 0.9rem; }
+/* Proportional figures: this is a standalone number, not a column. */
+.hero-value { font-size: 3.2rem; font-weight: 600; line-height: 1.15; margin-top: 6px; }
+.hero-note { font-size: 0.85rem; }
+
+.tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+.tile-label { color: var(--ink-2); font-size: 0.82rem; }
+.tile-value { font-size: 1.7rem; font-weight: 600; line-height: 1.3; }
+
+/* ── status chips: colour never carries the meaning alone ────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.chip .icon { color: var(--chip-color, var(--muted)); font-weight: 700; flex: none; }
+.chip[data-status='good'] { --chip-color: var(--good); }
+.chip[data-status='warning'] { --chip-color: var(--warning); }
+.chip[data-status='serious'] { --chip-color: var(--serious); }
+.chip[data-status='critical'] { --chip-color: var(--critical); }
+
+.status-rows { display: flex; flex-direction: column; gap: 10px; }
+.status-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
+
+/* ── charts: single hue, length carries the value ────────────────────── */
+.chart { display: flex; flex-direction: column; gap: 2px; } /* 2px surface gap between adjacent bars */
+.bar-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 22%) 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 3px 0;
+  cursor: default;
+}
+.bar-row:hover .bar-fill { filter: brightness(1.08); }
+.bar-name { color: var(--ink-2); font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The lane has no track: this is a bar chart, not a meter. Bars grow from a
+   single baseline - the right edge, in RTL - and the value rides the tip. */
+.bar-lane { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bar-fill {
+  flex: 0 0 auto;
+  height: 18px; /* well under the 24px cap - the leftover band is air */
+  background: var(--mark);
+  border-radius: 4px 0 0 4px; /* 4px rounded data-end, square at the baseline */
+  min-width: 3px;
+  transition: width 0.25s ease;
+}
+/* Value at the tip, in text ink - never the data colour. */
+.bar-value { font-variant-numeric: tabular-nums; font-size: 0.85rem; color: var(--ink); white-space: nowrap; }
+.bar-sub { color: var(--muted); font-size: 0.78rem; }
+.axis-note { color: var(--muted); font-size: 0.78rem; border-top: 1px solid var(--axis); margin-top: 8px; padding-top: 6px; }
+
+/* ── tables ──────────────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+th, td { text-align: start; padding: 9px 10px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; font-size: 0.8rem; }
+tbody tr:hover { background: var(--plane); }
+td.num { font-variant-numeric: tabular-nums; }
+td.wrap { white-space: normal; min-width: 160px; }
+
+.filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 14px; }
+.filters label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--ink-2); }
+.filters input, .filters select { min-width: 140px; }
+.filters button { background: var(--mark); border-color: var(--mark); color: #fff; font-weight: 600; margin: 0; }
+
+.empty { color: var(--muted); padding: 22px 0; text-align: center; }
+.row-actions { display: flex; gap: 6px; }
+.row-actions button { padding: 5px 9px; font-size: 0.8rem; }
+
+/* ── tooltip ─────────────────────────────────────────────────────────── */
+.tooltip {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  max-width: 260px;
+}
+.tooltip b { font-variant-numeric: tabular-nums; }

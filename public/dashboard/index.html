@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>لوحة الشبكة — شبكة عقار</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%8F%98%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+
+<!-- ─── تسجيل الدخول ─────────────────────────────────────────────────── -->
+<main id="login" class="login">
+  <form class="login-card" id="login-form">
+    <h1>لوحة الشبكة</h1>
+    <p class="muted">الدخول متاح لمالك المنصة فقط.</p>
+    <label for="email">البريد الإلكتروني</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="password">كلمة المرور</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button type="submit" id="login-btn">دخول</button>
+    <p class="error" id="login-error" role="alert" hidden></p>
+  </form>
+</main>
+
+<!-- ─── اللوحة ───────────────────────────────────────────────────────── -->
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="brand">
+      <strong>شبكة عقار</strong>
+      <span class="muted">لوحة الشبكة</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" class="tab" data-view="overview" aria-selected="true">نظرة عامة</button>
+      <button role="tab" class="tab" data-view="offices" aria-selected="false">المكاتب</button>
+      <button role="tab" class="tab" data-view="properties" aria-selected="false">العقارات</button>
+      <button role="tab" class="tab" data-view="insights" aria-selected="false">التحليلات</button>
+    </nav>
+    <div class="topbar-actions">
+      <button id="theme-toggle" class="ghost" title="تبديل الوضع" aria-label="تبديل الوضع الفاتح والداكن">◐</button>
+      <button id="refresh" class="ghost" title="تحديث">تحديث</button>
+      <button id="logout" class="ghost">خروج</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" role="alert" hidden></div>
+
+  <!-- نظرة عامة -->
+  <section class="view" id="view-overview">
+    <div class="hero-row">
+      <div class="hero">
+        <div class="hero-label">إجمالي العملاء في الشبكة</div>
+        <div class="hero-value" id="hero-leads">—</div>
+        <div class="hero-note muted" id="hero-note"></div>
+      </div>
+      <div class="tiles" id="tiles"></div>
+    </div>
+
+    <div class="grid-2">
+      <section class="card">
+        <h2>الاشتراكات</h2>
+        <p class="card-note muted">حالة كل مكتب في الشبكة.</p>
+        <div id="sub-status"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>اشتراكات تنتهي قريباً</h2>
+          <label class="inline muted">
+            خلال
+            <select id="expiring-days">
+              <option value="7">٧ أيام</option>
+              <option value="14" selected>١٤ يوماً</option>
+              <option value="30">٣٠ يوماً</option>
+            </select>
+          </label>
+        </div>
+        <div id="expiring"></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- المكاتب -->
+  <section class="view" id="view-offices" hidden>
+    <section class="card">
+      <div class="card-head">
+        <h2>المكاتب</h2>
+        <input id="office-filter" type="search" placeholder="بحث بالاسم أو المدينة">
+      </div>
+      <div class="table-wrap"><table id="offices-table"></table></div>
+    </section>
+  </section>
+
+  <!-- العقارات -->
+  <section class="view" id="view-properties" hidden>
+    <section class="card">
+      <h2>العقارات عبر كل المكاتب</h2>
+      <p class="card-note muted">بحث لا يستطيعه أي مكتب — يرى كل مكتب عقاراته فقط.</p>
+      <form class="filters" id="property-filters">
+        <label>بحث<input name="query" type="search" placeholder="رقم العرض، حي، نص"></label>
+        <label>الحي<input name="district" type="search"></label>
+        <label>المكتب<select name="officeId"><option value="">كل المكاتب</option></select></label>
+        <label>أقل سعر<input name="minPrice" type="number" min="0" step="1000" inputmode="numeric"></label>
+        <label>أعلى سعر<input name="maxPrice" type="number" min="0" step="1000" inputmode="numeric"></label>
+        <button type="submit">بحث</button>
+      </form>
+      <div class="table-wrap"><table id="properties-table"></table></div>
+    </section>
+  </section>
+
+  <!-- التحليلات -->
+  <section class="view" id="view-insights" hidden>
+    <div class="grid-2">
+      <section class="card">
+        <h2>المعروض حسب نوع العقار</h2>
+        <p class="card-note muted">عدد العروض المنشورة، ومتوسط السعر.</p>
+        <div class="chart" id="chart-type"></div>
+      </section>
+      <section class="card">
+        <h2>المعروض حسب المدينة</h2>
+        <p class="card-note muted">عدد العروض المنشورة.</p>
+        <div class="chart" id="chart-city"></div>
+      </section>
+    </div>
+    <section class="card">
+      <h2>الطلب حسب نية العميل</h2>
+      <p class="card-note muted">العملاء الذين بحثوا خلال آخر ٣٠ يوماً.</p>
+      <div class="chart" id="chart-intent"></div>
+    </section>
+  </section>
+</div>
+
+<div class="tooltip" id="tooltip" hidden></div>
+<script src="./app.js"></script>
+</body>
+</html>

@@ -22,7 +22,7 @@
 | اشتراك مدفوع + **3 أشهر مجاناً** | `TRIAL_DAYS=90` مع فترة سماح، وتذكير على الواتساب قبل الانتهاء |
 | قاعدة بيانات مركزية واحدة | PostgreSQL واحدة، و`officeId` على كل صف |
 | عزل تام بين المكاتب | امتداد Prisma يفرض النطاق + سياسات RLS في PostgreSQL |
-| تحكم شامل للمالك | `SUPER_ADMIN` وحده يرى الشبكة كاملة عبر `/api/admin/*` |
+| تحكم شامل للمالك | لوحة واحدة على `/dashboard` يراها `SUPER_ADMIN` وحده |
 | صفر شاشات لصاحب المكتب | حالة محادثة على الواتساب فقط: صور + سعر + حي + دبوس |
 | واتساب رسمي | WhatsApp Cloud API من Meta، بتحقق من توقيع كل Webhook |
 | تشغيل ٢٤ ساعة | NestJS على Railway، ومهام مجدولة داخل نفس الخدمة |
@@ -45,6 +45,7 @@ npm run db:seed               # مكتب تجريبي بعقارات وعملا�
 npm run start:dev
 ```
 
+- **لوحة الشبكة: `http://localhost:3000/dashboard/`** (لمالك المنصة فقط)
 - توثيق الـ API: `http://localhost:3000/api/docs`
 - فحص الصحة: `http://localhost:3000/health`
 
@@ -83,6 +84,7 @@ npm test
 |---|---|
 | [`docs/VISION.md`](docs/VISION.md) | بيان المتطلبات الأصلي للمنصة |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | البنية، العزل، ولماذا اتُّخذ كل قرار |
+| [`docs/DASHBOARD.md`](docs/DASHBOARD.md) | لوحة الشبكة: الشاشة الوحيدة، ولمن هي |
 | [`docs/WHATSAPP_SETUP.md`](docs/WHATSAPP_SETUP.md) | ربط رقم واتساب لكل مكتب خطوة بخطوة |
 | [`docs/DEPLOYMENT_RAILWAY.md`](docs/DEPLOYMENT_RAILWAY.md) | النشر على Railway مع Supabase |
 | [`docs/ANTI_SPAM.md`](docs/ANTI_SPAM.md) | قواعد منع التكرار والإزعاج بالتفصيل |
