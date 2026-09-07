@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+*.log
+.DS_Store
+# Incremental build caches: a stale one makes tsc emit nothing while
+# nest's deleteOutDir has already removed dist/.
+*.tsbuildinfo
