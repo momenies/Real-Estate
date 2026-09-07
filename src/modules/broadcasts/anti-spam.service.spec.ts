@@ -97,9 +97,10 @@ describeWithDb('AntiSpamService - protecting the customer and the number', () =>
       where: { id: leadId },
       data: { lastBroadcastAt: new Date(Date.now() - 2 * 3_600_000) },
     });
-    await expect(
-      check({ settings: { ...SETTINGS, dailyCapPerLead: 5 } }),
-    ).resolves.toEqual({ allowed: false, reason: SkipReason.COOLDOWN_ACTIVE });
+    await expect(check({ settings: { ...SETTINGS, dailyCapPerLead: 5 } })).resolves.toEqual({
+      allowed: false,
+      reason: SkipReason.COOLDOWN_ACTIVE,
+    });
   });
 
   it('honours opt-out above every other rule', async () => {

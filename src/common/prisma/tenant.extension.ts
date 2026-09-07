@@ -43,13 +43,7 @@ const RELATION_SCOPED: Record<string, (officeId: string) => object> = {
  * wrapping these in `AND` would make `{ propertyId_leadId: ... }` unreachable
  * and Prisma would reject the query.
  */
-const UNIQUE_WHERE_OPS = new Set([
-  'findUnique',
-  'findUniqueOrThrow',
-  'update',
-  'delete',
-  'upsert',
-]);
+const UNIQUE_WHERE_OPS = new Set(['findUnique', 'findUniqueOrThrow', 'update', 'delete', 'upsert']);
 
 /** Operations taking a plain filter, where an `AND` wrapper is safe. */
 const FILTER_WHERE_OPS = new Set([
@@ -77,11 +71,7 @@ const mergeUniqueWhere = (model: string, where: unknown, scope: object): object 
   const merged = { ...((where ?? {}) as Record<string, unknown>) };
   for (const [key, value] of Object.entries(scope)) {
     const existing = merged[key];
-    if (
-      existing !== undefined &&
-      typeof existing !== 'object' &&
-      existing !== value
-    ) {
+    if (existing !== undefined && typeof existing !== 'object' && existing !== value) {
       throw new ForbiddenException(
         `Cross-office access denied on "${model}": ${key} does not belong to the office in scope.`,
       );

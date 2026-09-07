@@ -1,11 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import {
-  BroadcastStatus,
-  DeliveryStatus,
-  MediaType,
-  SkipReason,
-} from '@prisma/client';
+import { BroadcastStatus, DeliveryStatus, MediaType, SkipReason } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TenantStore } from '../../common/tenancy/tenant-context';
 import { isWithinQuietHours } from '../../common/utils/time.util';
@@ -61,9 +56,7 @@ export class BroadcastDispatcherService {
       const settings = office.settings;
       if (!settings || !office.whatsappPhoneNumberId) continue;
 
-      if (
-        isWithinQuietHours(office.timezone, settings.quietHoursStart, settings.quietHoursEnd)
-      ) {
+      if (isWithinQuietHours(office.timezone, settings.quietHoursStart, settings.quietHoursEnd)) {
         continue; // resume automatically once the quiet window closes
       }
 

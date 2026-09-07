@@ -84,7 +84,10 @@ export function renderHarajPage(publication: {
       ? `<div class="card">
     <div class="muted">الصور (${images.length}) — اضغط مطولاً على الصورة لحفظها</div>
     <div class="imgs">${images
-      .map((url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt="" loading="lazy"></a>`)
+      .map(
+        (url) =>
+          `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img src="${escapeHtml(url)}" alt="" loading="lazy"></a>`,
+      )
       .join('')}</div>
   </div>`
       : ''

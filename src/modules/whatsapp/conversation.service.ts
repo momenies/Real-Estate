@@ -20,8 +20,7 @@ export const ConversationState = {
   LEAD_DONE: 'LEAD_DONE',
 } as const;
 
-export type ConversationStateValue =
-  (typeof ConversationState)[keyof typeof ConversationState];
+export type ConversationStateValue = (typeof ConversationState)[keyof typeof ConversationState];
 
 /** Meta only allows free-form replies within 24h of the customer's last message. */
 const SERVICE_WINDOW_HOURS = 24;

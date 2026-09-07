@@ -36,9 +36,35 @@ const TYPE_PATTERNS: Array<[RegExp, PropertyType]> = [
 ];
 
 const CITIES = [
-  'الرياض','جده','مكه','المدينه','الدمام','الخبر','الظهران','الطايف','بريده','عنيزه',
-  'تبوك','ابها','خميس مشيط','الاحساء','الهفوف','حايل','نجران','جازان','الجبيل','ينبع',
-  'الخرج','القطيف','عرعر','سكاكا','الباحه','رابغ','الزلفي','المجمعه','وادي الدواسر',
+  'الرياض',
+  'جده',
+  'مكه',
+  'المدينه',
+  'الدمام',
+  'الخبر',
+  'الظهران',
+  'الطايف',
+  'بريده',
+  'عنيزه',
+  'تبوك',
+  'ابها',
+  'خميس مشيط',
+  'الاحساء',
+  'الهفوف',
+  'حايل',
+  'نجران',
+  'جازان',
+  'الجبيل',
+  'ينبع',
+  'الخرج',
+  'القطيف',
+  'عرعر',
+  'سكاكا',
+  'الباحه',
+  'رابغ',
+  'الزلفي',
+  'المجمعه',
+  'وادي الدواسر',
 ];
 
 const FEATURE_PATTERNS: Array<[RegExp, string]> = [
@@ -105,9 +131,7 @@ export function parsePrice(normalized: string): number | null {
     if (value !== null) return Math.round(value * 1_000);
   }
 
-  const labelled = text.match(
-    /(?:السعر|سعر|بسعر|المطلوب|مطلوب|علي|ب)\s*:?\s*([\d,]+(?:\.\d+)?)/,
-  );
+  const labelled = text.match(/(?:السعر|سعر|بسعر|المطلوب|مطلوب|علي|ب)\s*:?\s*([\d,]+(?:\.\d+)?)/);
   if (labelled?.[1]) {
     const value = parseNumericToken(labelled[1]);
     if (value !== null && value >= 1_000) return Math.round(value);
@@ -130,9 +154,38 @@ export function parsePrice(normalized: string): number | null {
 }
 
 const DISTRICT_STOP_WORDS = new Set([
-  'في','علي','و','ثم','قريب','بجوار','خلف','امام','شمال','جنوب','شرق','غرب','مقابل',
-  'السعر','سعر','بسعر','مساحه','المساحه','غرف','غرفه','دور','ادوار','ريال','مطلوب',
-  'شارع','جوال','للبيع','للايجار','ايجار','بيع','تواصل','واتساب',
+  'في',
+  'علي',
+  'و',
+  'ثم',
+  'قريب',
+  'بجوار',
+  'خلف',
+  'امام',
+  'شمال',
+  'جنوب',
+  'شرق',
+  'غرب',
+  'مقابل',
+  'السعر',
+  'سعر',
+  'بسعر',
+  'مساحه',
+  'المساحه',
+  'غرف',
+  'غرفه',
+  'دور',
+  'ادوار',
+  'ريال',
+  'مطلوب',
+  'شارع',
+  'جوال',
+  'للبيع',
+  'للايجار',
+  'ايجار',
+  'بيع',
+  'تواصل',
+  'واتساب',
 ]);
 
 /**
@@ -141,9 +194,7 @@ const DISTRICT_STOP_WORDS = new Set([
  * not a city, a preposition, or the start of the next clause.
  */
 export function parseDistrict(normalized: string): string | null {
-  const explicit = normalized.match(
-    /(?:حي|بحي|في حي)\s+((?:ال)?[ء-ي]+(?:\s+(?:ال)?[ء-ي]+)?)/,
-  );
+  const explicit = normalized.match(/(?:حي|بحي|في حي)\s+((?:ال)?[ء-ي]+(?:\s+(?:ال)?[ء-ي]+)?)/);
   if (!explicit?.[1]) return null;
 
   const kept: string[] = [];
@@ -176,10 +227,7 @@ export function parseProperty(rawText: string): ParsedProperty {
   const bedrooms = firstMatch(normalized, [/(\d+)\s*(?:غرف نوم|غرف|غرفه)/]);
   const bathrooms = firstMatch(normalized, [/(\d+)\s*(?:دورات مياه|دوره مياه|حمامات|حمام)/]);
   const floors = firstMatch(normalized, [/(\d+)\s*(?:ادوار|دور|طوابق|طابق)/]);
-  const ageYears = firstMatch(normalized, [
-    /(?:عمر\D{0,12}?)(\d+)/,
-    /(\d+)\s*(?:سنوات|سنه|سنين)/,
-  ]);
+  const ageYears = firstMatch(normalized, [/(?:عمر\D{0,12}?)(\d+)/, /(\d+)\s*(?:سنوات|سنه|سنين)/]);
 
   const features = FEATURE_PATTERNS.filter(([pattern]) => pattern.test(normalized)).map(
     ([, label]) => label,
