@@ -1,0 +1,680 @@
+// ---------------------------------------------------------------------------
+// Aqar Network - Central multi-tenant real-estate database
+//
+// Every tenant-owned row carries `officeId`. Isolation is enforced twice:
+//   1. Application layer  -> Prisma client extension (src/prisma/tenant.extension.ts)
+//   2. Database layer     -> PostgreSQL Row Level Security (see migrations/*_rls)
+// The super admin is the only principal able to read across offices.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ----------------------------- enums ---------------------------------------
+
+enum OfficeStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum PlanCode {
+  TRIAL
+  BASIC
+  PRO
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  OFFICE_OWNER
+  OFFICE_AGENT
+}
+
+enum PropertyStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  SOLD
+}
+
+enum DealType {
+  SALE
+  RENT
+  INVESTMENT
+  UNKNOWN
+}
+
+enum PropertyType {
+  APARTMENT
+  VILLA
+  LAND
+  BUILDING
+  SHOP
+  OFFICE
+  FARM
+  CHALET
+  REST_HOUSE
+  OTHER
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  AUDIO
+}
+
+enum LeadIntent {
+  BUY
+  RENT
+  SELL
+  LEASE_OUT
+  UNKNOWN
+}
+
+enum LeadStatus {
+  NEW
+  ACTIVE
+  QUALIFIED
+  CLOSED
+  LOST
+}
+
+enum ConversationActor {
+  OWNER
+  LEAD
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum BroadcastStatus {
+  DRAFT
+  QUEUED
+  SENDING
+  COMPLETED
+  CANCELED
+  FAILED
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  SKIPPED
+}
+
+enum SkipReason {
+  ALREADY_RECEIVED_PROPERTY
+  DAILY_CAP_REACHED
+  COOLDOWN_ACTIVE
+  OPTED_OUT
+  QUIET_HOURS
+  OUTSIDE_24H_WINDOW
+  NO_MATCH
+  INVALID_NUMBER
+}
+
+enum ExternalPlatform {
+  TIKTOK
+  HARAJ
+  SNAPCHAT
+  INSTAGRAM
+  X
+}
+
+enum PublicationStatus {
+  PREPARED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  EXPIRED
+}
+
+// ----------------------------- tenancy -------------------------------------
+
+model Office {
+  id        String       @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String       @unique
+  city      String?
+  ownerName String?
+  status    OfficeStatus @default(PENDING)
+
+  /// Meta WhatsApp Cloud API business number that serves this office.
+  /// Inbound webhooks are routed to the tenant through this id.
+  whatsappPhoneNumberId String? @unique
+  whatsappDisplayNumber String?
+  wabaId                String?
+
+  timezone String @default("Asia/Riyadh")
+  locale   String @default("ar")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  settings      OfficeSettings?
+  subscription  Subscription?
+  users         User[]
+  properties    Property[]
+  media         PropertyMedia[]
+  leads         Lead[]
+  conversations Conversation[]
+  messages      Message[]
+  broadcasts    Broadcast[]
+  recipients    BroadcastRecipient[]
+  deliveries    PropertyDelivery[]
+  quotas        LeadDailyQuota[]
+  accounts      ExternalAccount[]
+  publications  ExternalPublication[]
+
+  @@index([status])
+  @@map("offices")
+}
+
+model OfficeSettings {
+  id       String @id @default(uuid()) @db.Uuid
+  officeId String @unique @db.Uuid
+  office   Office @relation(fields: [officeId], references: [id], onDelete: Cascade)
+
+  // --- anti-spam / deduplication guardrails ---
+  /// Maximum broadcast messages a single lead may receive per calendar day.
+  dailyCapPerLead         Int @default(1)
+  /// Minimum hours between two broadcast messages to the same lead.
+  minHoursBetweenMessages Int @default(20)
+  /// Local quiet hours during which no broadcast is dispatched.
+  quietHoursStart         Int @default(22)
+  quietHoursEnd           Int @default(8)
+  /// Messages per minute per office - protects the number from Meta throttling.
+  broadcastRatePerMinute  Int @default(20)
+
+  // --- lead onboarding ---
+  autoSendLatestToNewLead Boolean @default(true)
+  latestCount             Int     @default(3)
+
+  // --- property drafting ---
+  /// Minutes an unfinished WhatsApp property draft stays open for more media.
+  draftWindowMinutes Int @default(30)
+
+  defaultCity String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("office_settings")
+}
+
+model User {
+  id       String  @id @default(uuid()) @db.Uuid
+  /// NULL for the platform super admin - they belong to no office.
+  officeId String? @db.Uuid
+  office   Office? @relation(fields: [officeId], references: [id], onDelete: Cascade)
+
+  name         String
+  role         UserRole @default(OFFICE_OWNER)
+  email        String?  @unique
+  passwordHash String?
+  /// E.164 without '+', matches the WhatsApp wa_id of the office owner.
+  phone        String?
+  waId         String?
+  isActive     Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  properties Property[]
+  broadcasts Broadcast[]
+
+  @@unique([officeId, waId])
+  @@index([waId])
+  @@map("users")
+}
+
+// --------------------------- subscriptions ---------------------------------
+
+model Subscription {
+  id       String @id @default(uuid()) @db.Uuid
+  officeId String @unique @db.Uuid
+  office   Office @relation(fields: [officeId], references: [id], onDelete: Cascade)
+
+  plan   PlanCode           @default(TRIAL)
+  status SubscriptionStatus @default(TRIALING)
+
+  /// 3 free months, the hook that brings traditional offices onto the network.
+  trialStartsAt      DateTime  @default(now())
+  trialEndsAt        DateTime
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  /// Days of write access kept after expiry before the account freezes.
+  graceUntil         DateTime?
+
+  priceSar       Int       @default(0)
+  canceledAt     DateTime?
+  lastRemindedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events SubscriptionEvent[]
+
+  @@index([status, trialEndsAt])
+  @@map("subscriptions")
+}
+
+model SubscriptionEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  subscriptionId String       @db.Uuid
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  type      String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([subscriptionId, createdAt])
+  @@map("subscription_events")
+}
+
+// ---------------------------- inventory ------------------------------------
+
+model Property {
+  id       String @id @default(uuid()) @db.Uuid
+  officeId String @db.Uuid
+  office   Office @relation(fields: [officeId], references: [id], onDelete: Cascade)
+
+  createdById String? @db.Uuid
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// Short human reference shown in WhatsApp, unique inside the office.
+  refCode String
+
+  status       PropertyStatus @default(DRAFT)
+  dealType     DealType       @default(UNKNOWN)
+  propertyType PropertyType   @default(OTHER)
+
+  title       String?
+  description String?
+  priceSar    Int?
+  district    String?
+  city        String?
+
+  latitude     Float?
+  longitude    Float?
+  locationName String?
+
+  areaSqm   Float?
+  bedrooms  Int?
+  bathrooms Int?
+  floors    Int?
+  ageYears  Int?
+  features  String[] @default([])
+
+  /// Raw WhatsApp text the owner typed, kept for re-parsing and audit.
+  rawText String?
+
+  publishedAt    DateTime?
+  draftExpiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  media        PropertyMedia[]
+  broadcasts   Broadcast[]
+  deliveries   PropertyDelivery[]
+  publications ExternalPublication[]
+
+  @@unique([officeId, refCode])
+  @@index([officeId, status, createdAt])
+  @@index([officeId, district])
+  @@index([officeId, propertyType, dealType])
+  @@map("properties")
+}
+
+model PropertyMedia {
+  id         String   @id @default(uuid()) @db.Uuid
+  officeId   String   @db.Uuid
+  office     Office   @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  type       MediaType
+  /// Meta media id - valid for a short window, used to fetch the binary once.
+  waMediaId  String?
+  /// Object key inside the storage bucket once mirrored.
+  storageKey String?
+  url        String?
+  mimeType   String?
+  sizeBytes  Int?
+  caption    String?
+  sortOrder  Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([propertyId, sortOrder])
+  @@index([officeId])
+  @@map("property_media")
+}
+
+// ------------------------------ leads --------------------------------------
+
+model Lead {
+  id       String @id @default(uuid()) @db.Uuid
+  officeId String @db.Uuid
+  office   Office @relation(fields: [officeId], references: [id], onDelete: Cascade)
+
+  waId  String
+  phone String?
+  name  String?
+
+  intent LeadIntent @default(UNKNOWN)
+  status LeadStatus @default(NEW)
+
+  propertyTypes PropertyType[] @default([])
+  districts     String[]       @default([])
+  city          String?
+  budgetMin     Int?
+  budgetMax     Int?
+  notes         String?
+  source        String?        @default("whatsapp")
+
+  /// Drives the "customers who searched in the last month/week" audience.
+  lastSearchAt    DateTime?
+  lastActiveAt    DateTime  @default(now())
+  lastMessageAt   DateTime?
+  /// Last time ANY broadcast reached this lead - powers the cooldown rule.
+  lastBroadcastAt DateTime?
+
+  optedOut   Boolean   @default(false)
+  optedOutAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversations Conversation[]
+  recipients    BroadcastRecipient[]
+  deliveries    PropertyDelivery[]
+  quotas        LeadDailyQuota[]
+
+  @@unique([officeId, waId])
+  @@index([officeId, lastSearchAt])
+  @@index([officeId, status])
+  @@map("leads")
+}
+
+// -------------------------- conversations ----------------------------------
+
+model Conversation {
+  id       String @id @default(uuid()) @db.Uuid
+  officeId String @db.Uuid
+  office   Office @relation(fields: [officeId], references: [id], onDelete: Cascade)
+
+  waId  String
+  actor ConversationActor
+
+  /// Finite-state-machine node, e.g. IDLE | DRAFT_COLLECTING | LEAD_ASK_BUDGET
+  state   String @default("IDLE")
+  context Json   @default("{}")
+
+  leadId String? @db.Uuid
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  draftPropertyId String? @db.Uuid
+
+  /// Meta's 24h customer-service window - free-form replies are only allowed
+  /// while this is in the future.
+  serviceWindowExpiresAt DateTime?
+  expiresAt              DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([officeId, waId])
+  @@index([officeId, state])
+  @@map("conversations")
+}
+
+model Message {
+  id       String @id @default(uuid()) @db.Uuid
+  officeId String @db.Uuid
+  office   Office @relation(fields: [officeId], references: [id], onDelete: Cascade)
+
+  waId        String
+  direction   MessageDirection
+  waMessageId String?          @unique
+  type        String
+  body        String?
+  payload     Json?
+  status      MessageStatus    @default(PENDING)
+  error       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([officeId, waId, createdAt])
+  @@map("messages")
+}
+
+/// Idempotency ledger - Meta retries webhooks, we process each event once.
+model WebhookEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  provider    String
+  externalId  String
+  payload     Json
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+
+  @@unique([provider, externalId])
+  @@map("webhook_events")
+}
+
+// ---------------------------- broadcasting ---------------------------------
+
+model Broadcast {
+  id       String @id @default(uuid()) @db.Uuid
+  officeId String @db.Uuid
+  office   Office @relation(fields: [officeId], references: [id], onDelete: Cascade)
+
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  createdById String? @db.Uuid
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  status BroadcastStatus @default(DRAFT)
+
+  /// "customers who searched during the last N days" - 1 / 7 / 30 / 90.
+  audienceWindowDays   Int     @default(30)
+  /// Optional extra narrowing: districts, propertyTypes, budget fit.
+  filters              Json?
+  matchLeadPreferences Boolean @default(true)
+
+  message String?
+
+  totalTargeted Int @default(0)
+  totalSent     Int @default(0)
+  totalSkipped  Int @default(0)
+  totalFailed   Int @default(0)
+
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipients BroadcastRecipient[]
+  deliveries PropertyDelivery[]
+
+  @@index([officeId, status])
+  @@map("broadcasts")
+}
+
+model BroadcastRecipient {
+  id          String    @id @default(uuid()) @db.Uuid
+  officeId    String    @db.Uuid
+  office      Office    @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  broadcastId String    @db.Uuid
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  leadId      String    @db.Uuid
+  lead        Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  status      DeliveryStatus @default(PENDING)
+  skipReason  SkipReason?
+  waMessageId String?
+  error       String?
+  attempts    Int            @default(0)
+  sentAt      DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([broadcastId, leadId])
+  @@index([status, createdAt])
+  @@index([officeId, status])
+  @@map("broadcast_recipients")
+}
+
+/// Hard deduplication: a property is delivered to a lead at most once, ever.
+model PropertyDelivery {
+  id         String   @id @default(uuid()) @db.Uuid
+  officeId   String   @db.Uuid
+  office     Office   @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  leadId     String   @db.Uuid
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  broadcastId String?    @db.Uuid
+  broadcast   Broadcast? @relation(fields: [broadcastId], references: [id], onDelete: SetNull)
+
+  channel String   @default("broadcast")
+  sentAt  DateTime @default(now())
+
+  @@unique([propertyId, leadId])
+  @@index([officeId, leadId, sentAt])
+  @@map("property_deliveries")
+}
+
+/// Per-day counter enforcing "at most N promotional messages per lead per day".
+model LeadDailyQuota {
+  id       String @id @default(uuid()) @db.Uuid
+  officeId String @db.Uuid
+  office   Office @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  leadId   String @db.Uuid
+  lead     Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  /// Local calendar day in the office timezone, format YYYY-MM-DD.
+  day       String
+  sentCount Int    @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([leadId, day])
+  @@index([officeId, day])
+  @@map("lead_daily_quotas")
+}
+
+// --------------------------- external channels -----------------------------
+
+model ExternalAccount {
+  id       String @id @default(uuid()) @db.Uuid
+  officeId String @db.Uuid
+  office   Office @relation(fields: [officeId], references: [id], onDelete: Cascade)
+
+  platform       ExternalPlatform
+  externalUserId String?
+  displayName    String?
+
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scopes                String[]  @default([])
+  meta                  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  publications ExternalPublication[]
+
+  @@unique([officeId, platform])
+  @@map("external_accounts")
+}
+
+model ExternalPublication {
+  id       String @id @default(uuid()) @db.Uuid
+  officeId String @db.Uuid
+  office   Office @relation(fields: [officeId], references: [id], onDelete: Cascade)
+
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  accountId String?          @db.Uuid
+  account   ExternalAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  platform ExternalPlatform
+  status   PublicationStatus @default(PREPARED)
+
+  /// TikTok publish id / Haraj listing url once the owner pastes it.
+  externalPostId String?
+  url            String?
+  caption        String?
+  payload        Json?
+  error          String?
+
+  /// Smart copy-paste: signed short token for the Haraj helper page.
+  shareToken     String?   @unique
+  shareExpiresAt DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+
+  @@index([officeId, platform, status])
+  @@map("external_publications")
+}
+
+// ------------------------------- audit -------------------------------------
+
+model AuditLog {
+  id          String  @id @default(uuid()) @db.Uuid
+  officeId    String? @db.Uuid
+  actorUserId String? @db.Uuid
+  actorType   String  @default("system")
+
+  action   String
+  entity   String?
+  entityId String?
+  meta     Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([officeId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
