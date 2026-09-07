@@ -1,7 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "src"
+    "rootDir": "src",
+    // A production build must always emit. With incremental output, a stale
+    // .tsbuildinfo makes tsc believe dist/ is up to date after nest has just
+    // deleted it, and the image ships with no dist/main.js at all.
+    "incremental": false
   },
   "include": ["src/**/*"],
   "exclude": [

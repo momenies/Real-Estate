@@ -63,6 +63,7 @@ npm test
 
 | المستند | المحتوى |
 |---|---|
+| [`docs/VISION.md`](docs/VISION.md) | بيان المتطلبات الأصلي للمنصة |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | البنية، العزل، ولماذا اتُّخذ كل قرار |
 | [`docs/WHATSAPP_SETUP.md`](docs/WHATSAPP_SETUP.md) | ربط رقم واتساب لكل مكتب خطوة بخطوة |
 | [`docs/DEPLOYMENT_RAILWAY.md`](docs/DEPLOYMENT_RAILWAY.md) | النشر على Railway مع Supabase |
