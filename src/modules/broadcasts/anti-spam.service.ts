@@ -69,9 +69,7 @@ export class AntiSpamService {
 
     // Eligible, but possibly not right now: the caller may hold this recipient
     // and send once the quiet window closes.
-    if (
-      isWithinQuietHours(input.timezone, settings.quietHoursStart, settings.quietHoursEnd, now)
-    ) {
+    if (isWithinQuietHours(input.timezone, settings.quietHoursStart, settings.quietHoursEnd, now)) {
       return { allowed: false, reason: SkipReason.QUIET_HOURS };
     }
 

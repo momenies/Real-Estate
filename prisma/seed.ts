@@ -4,7 +4,15 @@
  *
  * Safe to re-run: everything is keyed on a fixed demo slug.
  */
-import { DealType, LeadIntent, LeadStatus, PrismaClient, PropertyStatus, PropertyType, UserRole } from '@prisma/client';
+import {
+  DealType,
+  LeadIntent,
+  LeadStatus,
+  PrismaClient,
+  PropertyStatus,
+  PropertyType,
+  UserRole,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();

@@ -97,11 +97,7 @@ export class LeadFlowService {
     );
   }
 
-  private async handleAction(
-    context: LeadContext,
-    lead: Lead,
-    actionId: string,
-  ): Promise<void> {
+  private async handleAction(context: LeadContext, lead: Lead, actionId: string): Promise<void> {
     const conversation = await this.conversations.getOrCreate(
       context.office.id,
       context.message.from,
@@ -148,12 +144,9 @@ export class LeadFlowService {
       const type = actionId.split(':')[2] as PropertyType;
       const updated = await this.leads.addPropertyType(lead, type);
       await this.conversations.setState(conversation.id, ConversationState.LEAD_ASK_DISTRICT);
-      await this.whatsapp.sendButtons(
-        phoneNumberId,
-        context.message.from,
-        LEAD.askDistrict,
-        [{ id: LeadAction.DISTRICT_ANY, title: 'كل الأحياء' }],
-      );
+      await this.whatsapp.sendButtons(phoneNumberId, context.message.from, LEAD.askDistrict, [
+        { id: LeadAction.DISTRICT_ANY, title: 'كل الأحياء' },
+      ]);
       void updated;
       return;
     }

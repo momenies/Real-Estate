@@ -56,7 +56,8 @@ export class WhatsappApiService {
   }
 
   private async send(phoneNumberId: string, payload: object): Promise<SendResult> {
-    const numberId = phoneNumberId || (this.config.get<string>('whatsapp.defaultPhoneNumberId') ?? '');
+    const numberId =
+      phoneNumberId || (this.config.get<string>('whatsapp.defaultPhoneNumberId') ?? '');
     try {
       const { data } = await this.http.post(`/${numberId}/messages`, {
         messaging_product: 'whatsapp',
@@ -72,7 +73,12 @@ export class WhatsappApiService {
     }
   }
 
-  sendText(phoneNumberId: string, to: string, body: string, previewUrl = false): Promise<SendResult> {
+  sendText(
+    phoneNumberId: string,
+    to: string,
+    body: string,
+    previewUrl = false,
+  ): Promise<SendResult> {
     return this.send(phoneNumberId, {
       to,
       type: 'text',

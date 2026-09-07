@@ -65,7 +65,9 @@ describeWithDb('tenant isolation extension', () => {
     // Regression: AND-wrapping this where would make Prisma reject the query.
     const lead = await base.lead.create({ data: { officeId: OFFICE_A, waId: '966500000002' } });
     const found = await TenantStore.runAsOffice(OFFICE_A, () =>
-      prisma.lead.findUnique({ where: { officeId_waId: { officeId: OFFICE_A, waId: '966500000002' } } }),
+      prisma.lead.findUnique({
+        where: { officeId_waId: { officeId: OFFICE_A, waId: '966500000002' } },
+      }),
     );
     expect(found?.id).toBe(lead.id);
     await base.lead.delete({ where: { id: lead.id } });

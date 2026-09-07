@@ -118,16 +118,11 @@ export class WhatsappService {
       });
       return true;
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         // Two deliveries raced; the other one won and is handling it.
         return false;
       }
-      this.logger.error(
-        `Could not claim webhook event ${externalId}: ${(error as Error).message}`,
-      );
+      this.logger.error(`Could not claim webhook event ${externalId}: ${(error as Error).message}`);
       throw error;
     }
   }

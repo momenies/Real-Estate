@@ -101,10 +101,7 @@ export class OfficesService {
     );
   }
 
-  async updateSettings(
-    officeId: string,
-    data: OfficeSettingsPatch,
-  ): Promise<OfficeSettings> {
+  async updateSettings(officeId: string, data: OfficeSettingsPatch): Promise<OfficeSettings> {
     await this.getSettings(officeId);
     return TenantStore.runAsOffice(officeId, () =>
       this.prisma.tenant.officeSettings.update({

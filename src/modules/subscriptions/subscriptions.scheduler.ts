@@ -63,10 +63,7 @@ export class SubscriptionsScheduler {
       }
 
       await this.whatsapp
-        .notifyOwner(
-          subscription.officeId,
-          OWNER.trialReminder(subscription.office.name, daysLeft),
-        )
+        .notifyOwner(subscription.officeId, OWNER.trialReminder(subscription.office.name, daysLeft))
         .catch(() => undefined);
       await this.subscriptions.touchReminder(subscription.id);
     }

@@ -1,11 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  Broadcast,
-  BroadcastStatus,
-  DeliveryStatus,
-  Property,
-  SkipReason,
-} from '@prisma/client';
+import { Broadcast, BroadcastStatus, DeliveryStatus, Property, SkipReason } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { LeadsService } from '../leads/leads.service';
 import { OfficesService } from '../offices/offices.service';

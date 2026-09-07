@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+jest-results.json
 .env
 .env.local
 *.log

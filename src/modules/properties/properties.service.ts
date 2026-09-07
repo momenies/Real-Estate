@@ -78,7 +78,10 @@ export class PropertiesService {
     if (property.dealType === DealType.UNKNOWN && parsed.dealType !== DealType.UNKNOWN) {
       data.dealType = parsed.dealType;
     }
-    if (property.propertyType === PropertyType.OTHER && parsed.propertyType !== PropertyType.OTHER) {
+    if (
+      property.propertyType === PropertyType.OTHER &&
+      parsed.propertyType !== PropertyType.OTHER
+    ) {
       data.propertyType = parsed.propertyType;
     }
     if (property.priceSar === null && parsed.priceSar !== null) data.priceSar = parsed.priceSar;

@@ -1,10 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  ExternalPlatform,
-  MediaType,
-  PublicationStatus,
-} from '@prisma/client';
+import { ExternalPlatform, MediaType, PublicationStatus } from '@prisma/client';
 import axios from 'axios';
 import { createHmac, randomBytes } from 'node:crypto';
 import { PrismaService } from '../../common/prisma/prisma.service';

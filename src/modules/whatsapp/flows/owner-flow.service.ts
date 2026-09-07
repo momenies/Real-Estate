@@ -224,16 +224,11 @@ export class OwnerFlowService {
     });
 
     await this.conversations.setState(conversationId, ConversationState.DRAFT_CONFIRM);
-    await this.whatsapp.sendButtons(
-      office.whatsappPhoneNumberId ?? '',
-      ownerWaId,
-      body,
-      [
-        { id: `${OwnerAction.PUBLISH}:${draft.id}`, title: '✅ نشر' },
-        { id: `${OwnerAction.EDIT}:${draft.id}`, title: '✏️ تعديل' },
-        { id: `${OwnerAction.CANCEL}:${draft.id}`, title: '🗑 إلغاء' },
-      ],
-    );
+    await this.whatsapp.sendButtons(office.whatsappPhoneNumberId ?? '', ownerWaId, body, [
+      { id: `${OwnerAction.PUBLISH}:${draft.id}`, title: '✅ نشر' },
+      { id: `${OwnerAction.EDIT}:${draft.id}`, title: '✏️ تعديل' },
+      { id: `${OwnerAction.CANCEL}:${draft.id}`, title: '🗑 إلغاء' },
+    ]);
   }
 
   private async handleAction(context: OwnerContext, actionId: string): Promise<void> {
@@ -326,7 +321,10 @@ export class OwnerFlowService {
       context,
       plan.targeted === 0
         ? OWNER.broadcastNoAudience
-        : OWNER.broadcastQueued(plan.targeted, WINDOW_LABELS[windowDays] ?? `آخر ${windowDays} يوم`),
+        : OWNER.broadcastQueued(
+            plan.targeted,
+            WINDOW_LABELS[windowDays] ?? `آخر ${windowDays} يوم`,
+          ),
     );
   }
 

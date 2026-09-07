@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push supersedes an in-flight run on the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  quality:
+    name: Format and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # `postinstall` runs `prisma generate`, so the client exists for tsc.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  test:
+    name: Tests against PostgreSQL
+    runs-on: ubuntu-latest
+
+    # The suites that matter most - tenant isolation and the anti-spam rules -
+    # skip themselves without a database. CI gives them a real one so they
+    # actually run here.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aqar_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aqar_test?schema=public
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/aqar_test?schema=public
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aqar_shadow?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # psql speaks libpq, which rejects Prisma's `?schema=` parameter, so this
+      # connects with flags rather than reusing DATABASE_URL.
+      - name: Create the shadow database used for drift detection
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE aqar_shadow;'
+
+      # Proves the migrations apply to an empty database - exactly what a fresh
+      # Supabase project and every deploy does.
+      - name: Apply migrations from scratch
+        run: npx prisma migrate deploy
+
+      - name: Verify the schema matches the migrations
+        run: npx prisma migrate diff
+          --from-migrations ./prisma/migrations
+          --to-schema-datamodel ./prisma/schema.prisma
+          --shadow-database-url "$SHADOW_DATABASE_URL"
+          --exit-code
+
+      - name: Verify row level security is active
+        run: |
+          npx prisma db execute --url "$DATABASE_URL" --stdin <<'SQL'
+          DO $$
+          DECLARE unprotected text;
+          BEGIN
+            SELECT string_agg(tablename, ', ') INTO unprotected
+            FROM pg_tables
+            WHERE schemaname = 'public'
+              AND tablename NOT IN ('_prisma_migrations')
+              AND NOT rowsecurity;
+            IF unprotected IS NOT NULL THEN
+              RAISE EXCEPTION 'Tables without row level security: %', unprotected;
+            END IF;
+          END
+          $$;
+          SQL
+
+      - name: Run tests
+        run: npx jest --ci --runInBand --json --outputFile=jest-results.json
+
+      # The database-backed suites - tenant isolation and the anti-spam rules -
+      # skip themselves when DATABASE_URL is unset. Without this the job could
+      # go green while having tested almost nothing.
+      - name: Confirm the database-backed suites actually ran
+        run: |
+          node -e "
+            const r = require('./jest-results.json');
+            const skipped = r.numPendingTests + r.numTodoTests;
+            console.log(\`passed=\${r.numPassedTests} failed=\${r.numFailedTests} skipped=\${skipped}\`);
+            if (skipped > 0) {
+              console.error('::error::' + skipped + ' tests skipped - the database-backed suites did not run.');
+              process.exit(1);
+            }
+            if (r.numPassedTests < 20) {
+              console.error('::error::only ' + r.numPassedTests + ' tests ran; expected the full suite.');
+              process.exit(1);
+            }
+          "
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # A committed .tsbuildinfo once made tsc believe dist/ was current after
+      # nest had just deleted it, so the build "succeeded" with no entrypoint
+      # and the deploy failed on MODULE_NOT_FOUND. Never again silently.
+      - name: Verify the build produced an entrypoint
+        run: |
+          test -f dist/main.js || { echo "::error::dist/main.js is missing"; exit 1; }
+          node -e "require('node:fs').accessSync('dist/main.js')"
+          echo "dist/main.js present ($(wc -c < dist/main.js) bytes)"
+
+      - name: Verify a second build still emits
+        run: |
+          npm run build
+          test -f dist/main.js || { echo "::error::rebuild produced no dist/main.js"; exit 1; }
+
+      - name: Fail if a build cache was committed
+        run: |
+          if git ls-files | grep -q 'tsbuildinfo'; then
+            echo "::error::A .tsbuildinfo file is tracked in git; it breaks fresh-clone builds."
+            exit 1
+          fi

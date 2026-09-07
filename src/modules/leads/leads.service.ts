@@ -114,8 +114,8 @@ export class LeadsService {
         if (!lead.propertyTypes.includes(match.propertyType)) return false;
       }
       if (match.district && lead.districts.length) {
-        const wanted = lead.districts.some((district) =>
-          match.district!.includes(district) || district.includes(match.district!),
+        const wanted = lead.districts.some(
+          (district) => match.district!.includes(district) || district.includes(match.district!),
         );
         if (!wanted) return false;
       }

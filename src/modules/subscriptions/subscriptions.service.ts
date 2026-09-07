@@ -1,11 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  PlanCode,
-  Prisma,
-  Subscription,
-  SubscriptionStatus,
-} from '@prisma/client';
+import { PlanCode, Prisma, Subscription, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TenantStore } from '../../common/tenancy/tenant-context';
 import { addDays } from '../../common/utils/time.util';
@@ -78,14 +73,17 @@ export class SubscriptionsService {
 
     const endsAt = this.effectiveEnd(subscription);
     const graceEnd = subscription.graceUntil ?? endsAt;
-    const daysRemaining = Math.max(
-      0,
-      Math.ceil((endsAt.getTime() - now.getTime()) / 86_400_000),
-    );
+    const daysRemaining = Math.max(0, Math.ceil((endsAt.getTime() - now.getTime()) / 86_400_000));
     const inTrial = subscription.status === SubscriptionStatus.TRIALING;
 
     if (subscription.status === SubscriptionStatus.CANCELED) {
-      return { allowed: false, status: subscription.status, daysRemaining: 0, inTrial, reason: 'canceled' };
+      return {
+        allowed: false,
+        status: subscription.status,
+        daysRemaining: 0,
+        inTrial,
+        reason: 'canceled',
+      };
     }
     if (now <= endsAt) {
       return { allowed: true, status: subscription.status, daysRemaining, inTrial };
