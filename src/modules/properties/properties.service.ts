@@ -196,6 +196,20 @@ export class PropertiesService {
     return property;
   }
 
+  /** Looks a property up by the short code the owner says out loud. */
+  async findByRefCode(officeId: string, refCode: string) {
+    return this.prisma.tenant.property.findFirst({
+      where: { officeId, refCode: { equals: refCode, mode: 'insensitive' } },
+    });
+  }
+
+  async findLatestPublished(officeId: string) {
+    return this.prisma.tenant.property.findFirst({
+      where: { officeId, status: PropertyStatus.PUBLISHED },
+      orderBy: { publishedAt: 'desc' },
+    });
+  }
+
   async findPublished(officeId: string, take = 20, skip = 0) {
     return this.prisma.tenant.property.findMany({
       where: { officeId, status: PropertyStatus.PUBLISHED },
