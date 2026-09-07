@@ -73,8 +73,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # psql speaks libpq, which rejects Prisma's `?schema=` parameter, so this
+      # connects with flags rather than reusing DATABASE_URL.
       - name: Create the shadow database used for drift detection
-        run: psql "$DATABASE_URL" -c 'CREATE DATABASE aqar_shadow;'
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE aqar_shadow;'
 
       # Proves the migrations apply to an empty database - exactly what a fresh
       # Supabase project and every deploy does.
@@ -113,7 +117,6 @@ jobs:
       # skip themselves when DATABASE_URL is unset. Without this the job could
       # go green while having tested almost nothing.
       - name: Confirm the database-backed suites actually ran
-        if: always()
         run: |
           node -e "
             const r = require('./jest-results.json');
