@@ -1,14 +1,14 @@
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { configureApp } from './app.setup';
 import { PrismaService } from './common/prisma/prisma.service';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     // Meta signs the exact bytes it sent, so the raw body must survive parsing.
     rawBody: true,
   });
@@ -16,21 +16,7 @@ async function bootstrap(): Promise<void> {
   const config = app.get(ConfigService);
   const logger = new Logger('Bootstrap');
 
-  app.use(
-    helmet({
-      // The Haraj helper page is server-rendered HTML with inline styles.
-      contentSecurityPolicy: false,
-      crossOriginResourcePolicy: { policy: 'cross-origin' },
-    }),
-  );
-  app.enableCors({ origin: true, credentials: true });
-  app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: false }),
-  );
-  app.useGlobalFilters(new AllExceptionsFilter());
-  app.setGlobalPrefix('api', {
-    exclude: ['health', 'webhooks/whatsapp', 'share/haraj/:token'],
-  });
+  configureApp(app);
 
   if (config.get<string>('env') !== 'production') {
     const document = SwaggerModule.createDocument(
