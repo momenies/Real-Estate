@@ -138,6 +138,23 @@ export class BroadcastsService {
     return { broadcast: updated, targeted, skipped, skipBreakdown };
   }
 
+  /** The broadcast an owner means when he types «إلغاء الإرسال». */
+  async findActive(officeId: string) {
+    return this.prisma.tenant.broadcast.findFirst({
+      where: {
+        officeId,
+        status: { in: [BroadcastStatus.QUEUED, BroadcastStatus.SENDING] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async countPending(broadcastId: string): Promise<number> {
+    return this.prisma.tenant.broadcastRecipient.count({
+      where: { broadcastId, status: DeliveryStatus.PENDING },
+    });
+  }
+
   async cancel(broadcastId: string): Promise<Broadcast> {
     await this.prisma.tenant.broadcastRecipient.updateMany({
       where: { broadcastId, status: DeliveryStatus.PENDING },
