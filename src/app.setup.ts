@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { join } from 'node:path';
@@ -34,6 +34,13 @@ export function configureApp(app: NestExpressApplication): void {
   });
 
   app.setGlobalPrefix('api', {
-    exclude: ['health', 'webhooks/whatsapp', 'share/haraj/:token'],
+    exclude: [
+      // The bare root must stay outside /api - it is what a browser opens
+      // first, and it redirects to the dashboard.
+      { path: '/', method: RequestMethod.GET },
+      'health',
+      'webhooks/whatsapp',
+      'share/haraj/:token',
+    ],
   });
 }

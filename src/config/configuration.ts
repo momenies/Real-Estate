@@ -8,6 +8,8 @@ export interface AppConfig {
   superAdminPassword: string;
   trialDays: number;
   graceDays: number;
+  /** Whether this instance runs the scheduled workers. */
+  workersEnabled: boolean;
   whatsapp: {
     verifyToken: string;
     appSecret: string;
@@ -46,6 +48,10 @@ export default (): AppConfig => ({
   // Three free months: the offer that gets a traditional office to try at all.
   trialDays: int(process.env.TRIAL_DAYS, 90),
   graceDays: int(process.env.GRACE_DAYS, 7),
+  // The dispatcher, the draft finalizer and the subscription sweep. Off lets an
+  // instance serve HTTP only - useful for a second replica, and it keeps tests
+  // from having live cron jobs mutate the database underneath them.
+  workersEnabled: process.env.WORKERS_ENABLED !== 'false',
   whatsapp: {
     verifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? '',
     appSecret: process.env.WHATSAPP_APP_SECRET ?? '',

@@ -1,6 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { BroadcastStatus, DeliveryStatus, MediaType, SkipReason } from '@prisma/client';
+import {
+  BroadcastStatus,
+  DeliveryStatus,
+  MediaType,
+  OfficeStatus,
+  SkipReason,
+} from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TenantStore } from '../../common/tenancy/tenant-context';
 import { isWithinQuietHours } from '../../common/utils/time.util';
@@ -24,10 +31,17 @@ export class BroadcastDispatcherService {
     private readonly prisma: PrismaService,
     private readonly whatsapp: WhatsappApiService,
     private readonly antiSpam: AntiSpamService,
+    private readonly config?: ConfigService,
   ) {}
+
+  private get enabled(): boolean {
+    // Default on: a missing ConfigService means a direct instantiation in a test.
+    return this.config?.get<boolean>('workersEnabled') ?? true;
+  }
 
   @Cron(CronExpression.EVERY_30_SECONDS)
   async tick(): Promise<void> {
+    if (!this.enabled) return;
     if (this.running) return; // never overlap two dispatch passes
     this.running = true;
     try {
@@ -55,6 +69,14 @@ export class BroadcastDispatcherService {
       const office = broadcast.office;
       const settings = office.settings;
       if (!settings || !office.whatsappPhoneNumberId) continue;
+
+      // Suspension has to stop outbound traffic, not only inbound. Otherwise
+      // suspending an office silences its bot while its queued broadcast keeps
+      // reaching customers - the worst of both.
+      if (office.status !== OfficeStatus.ACTIVE) {
+        this.logger.warn(`Office ${office.id} is ${office.status}; broadcast ${broadcast.id} held`);
+        continue;
+      }
 
       if (isWithinQuietHours(office.timezone, settings.quietHoursStart, settings.quietHoursEnd)) {
         continue; // resume automatically once the quiet window closes

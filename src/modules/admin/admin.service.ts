@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
-import { PropertyStatus, SubscriptionStatus } from '@prisma/client';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { OfficeStatus, PropertyStatus, SubscriptionStatus } from '@prisma/client';
+import { AuditService } from '../../common/audit/audit.service';
+import { OfficeSettingsPatch } from '../offices/offices.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TenantStore } from '../../common/tenancy/tenant-context';
 import { addDays } from '../../common/utils/time.util';
@@ -13,7 +15,103 @@ import { addDays } from '../../common/utils/time.util';
  */
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
+
+  /**
+   * Suspends or reactivates an office.
+   *
+   * This was the one lever the platform honoured but could never pull: the bot
+   * already drops inbound messages for a suspended office, yet nothing in the
+   * system could set the status. Without this, "suspend" was decoration.
+   */
+  async setOfficeStatus(officeId: string, status: OfficeStatus) {
+    const office = await this.prisma.office.findUnique({ where: { id: officeId } });
+    if (!office) throw new NotFoundException(`Office ${officeId} not found`);
+
+    const updated = await this.prisma.office.update({
+      where: { id: officeId },
+      data: { status },
+    });
+
+    await this.audit.record({
+      action: status === OfficeStatus.SUSPENDED ? 'office_suspended' : 'office_status_changed',
+      officeId,
+      entity: 'Office',
+      entityId: officeId,
+      meta: { from: office.status, to: status, officeName: office.name },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Lets the platform owner tune an office's anti-spam guardrails.
+   *
+   * The office's own endpoint is tenant-scoped, so the super admin - who belongs
+   * to no office - could read these settings but never change them. That matters
+   * most in the case they exist for: an office whose sending is putting its
+   * number at risk.
+   */
+  async updateOfficeSettings(officeId: string, patch: OfficeSettingsPatch) {
+    const before = await this.prisma.officeSettings.findUnique({ where: { officeId } });
+    if (!before) throw new NotFoundException(`Office ${officeId} has no settings row`);
+
+    const updated = await this.prisma.officeSettings.update({
+      where: { officeId },
+      data: patch,
+    });
+
+    // Record only what actually changed, so the trail reads as a diff.
+    const changed = Object.fromEntries(
+      Object.entries(patch)
+        .filter(
+          ([key, value]) =>
+            value !== undefined && (before as Record<string, unknown>)[key] !== value,
+        )
+        .map(([key, value]) => [
+          key,
+          { from: (before as Record<string, unknown>)[key], to: value },
+        ]),
+    );
+
+    await this.audit.record({
+      action: 'office_settings_updated',
+      officeId,
+      entity: 'OfficeSettings',
+      entityId: updated.id,
+      meta: { changed },
+    });
+
+    return updated;
+  }
+
+  async officeSettings(officeId: string) {
+    const settings = await this.prisma.officeSettings.findUnique({ where: { officeId } });
+    if (!settings) throw new NotFoundException(`Office ${officeId} has no settings row`);
+    return settings;
+  }
+
+  /** The control trail: who changed what, newest first. */
+  async auditTrail(take = 50) {
+    const rows = await this.audit.recent(take);
+    const officeIds = [
+      ...new Set(rows.map((row) => row.officeId).filter((id): id is string => !!id)),
+    ];
+    const offices = officeIds.length
+      ? await this.prisma.office.findMany({
+          where: { id: { in: officeIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const names = new Map(offices.map((office) => [office.id, office.name]));
+    return rows.map((row) => ({
+      ...row,
+      officeName: row.officeId ? names.get(row.officeId) : null,
+    }));
+  }
 
   async networkOverview() {
     return TenantStore.runAsSuperAdmin(async () => {

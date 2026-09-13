@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import configuration from './config/configuration';
+import { AuditModule } from './common/audit/audit.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { TenantContextMiddleware } from './common/tenancy/tenant.middleware';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -26,6 +27,7 @@ import { HealthController } from './health.controller';
     // Blunt protection for the public surface; the webhook is exempted below.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
     PrismaModule,
+    AuditModule,
     AuthModule,
     OfficesModule,
     SubscriptionsModule,

@@ -19,6 +19,8 @@ describeWithDb('network dashboard', () => {
   let origin: string;
 
   beforeAll(async () => {
+    // No live cron jobs mutating the database underneath the assertions.
+    process.env.WORKERS_ENABLED = 'false';
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
     configureApp(app as NestExpressApplication);

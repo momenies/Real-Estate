@@ -56,6 +56,96 @@ function statusChip(statusKey) {
   ]);
 }
 
+// ── modal ─────────────────────────────────────────────────────────────────
+/**
+ * Control actions are consequential - suspending an office, loosening its
+ * anti-spam guardrails, charging for a subscription. `window.prompt` cannot
+ * show what the current value is, cannot validate, and cannot be cancelled
+ * safely, so these get a real form.
+ *
+ * `fields` are rendered in order; the resolved value is an object of their
+ * values, or null when dismissed.
+ */
+function openModal({ title, note, fields = [], confirmLabel = 'تأكيد' }) {
+  const backdrop = $('#modal');
+  const form = $('#modal-form');
+  const error = $('#modal-error');
+  $('#modal-title').textContent = title;
+  $('#modal-note').textContent = note ?? '';
+  $('#modal-note').hidden = !note;
+  $('#modal-confirm').textContent = confirmLabel;
+  error.hidden = true;
+  form.replaceChildren();
+
+  for (const field of fields) {
+    const input =
+      field.type === 'select'
+        ? el(
+            'select',
+            { name: field.name },
+            field.options.map((option) =>
+              el('option', {
+                value: String(option.value),
+                textContent: option.label,
+                selected: String(option.value) === String(field.value),
+              }),
+            ),
+          )
+        : el('input', {
+            name: field.name,
+            type: field.type ?? 'text',
+            value: field.value ?? '',
+            ...(field.type === 'checkbox' ? { checked: !!field.value } : {}),
+            ...(field.min !== undefined ? { min: String(field.min) } : {}),
+            ...(field.max !== undefined ? { max: String(field.max) } : {}),
+            ...(field.placeholder ? { placeholder: field.placeholder } : {}),
+          });
+    form.append(
+      el('label', { className: field.type === 'checkbox' ? 'check' : '' }, [
+        field.label,
+        input,
+        field.hint ? el('span', { className: 'muted', textContent: field.hint }) : null,
+      ]),
+    );
+  }
+
+  backdrop.hidden = false;
+  (form.querySelector('input, select') ?? $('#modal-confirm')).focus();
+
+  return new Promise((resolve) => {
+    const close = (value) => {
+      backdrop.hidden = true;
+      $('#modal-confirm').onclick = null;
+      $('#modal-cancel').onclick = null;
+      document.removeEventListener('keydown', onKey);
+      resolve(value);
+    };
+    const onKey = (event) => {
+      if (event.key === 'Escape') close(null);
+    };
+    document.addEventListener('keydown', onKey);
+    $('#modal-cancel').onclick = () => close(null);
+    $('#modal-confirm').onclick = () => {
+      const data = {};
+      for (const input of form.querySelectorAll('input, select')) {
+        data[input.name] =
+          input.type === 'checkbox'
+            ? input.checked
+            : input.type === 'number'
+              ? (input.value === '' ? null : Number(input.value))
+              : input.value.trim();
+      }
+      close(data);
+    };
+  });
+}
+
+function modalError(message) {
+  const error = $('#modal-error');
+  error.textContent = message;
+  error.hidden = false;
+}
+
 // ── api ───────────────────────────────────────────────────────────────────
 async function api(path, options = {}) {
   const response = await fetch(`/api${path}`, {
@@ -286,10 +376,13 @@ function drawOffices() {
       : null;
     const left = daysUntil(end);
 
-    const activate = el('button', { className: 'ghost', textContent: 'تفعيل اشتراك' });
-    activate.addEventListener('click', () => activateSubscription(office));
+    const action = (label, handler, title) => {
+      const button = el('button', { className: 'ghost', textContent: label, title: title ?? label });
+      button.addEventListener('click', () => handler(office));
+      return button;
+    };
 
-    return el('tr', {}, [
+    return el('tr', { dataset: { officeStatus: office.status } }, [
       el('td', { className: 'wrap', textContent: office.name }),
       el('td', { textContent: office.city ?? '—' }),
       el('td', { textContent: OFFICE_STATUS[office.status] ?? office.status }),
@@ -300,27 +393,220 @@ function drawOffices() {
       el('td', { className: 'num', textContent: fmt(office._count?.properties) }),
       el('td', { className: 'num', textContent: fmt(office._count?.leads) }),
       el('td', { className: 'num', textContent: fmt(office._count?.broadcasts) }),
-      el('td', {}, el('div', { className: 'row-actions' }, [activate])),
+      el(
+        'td',
+        {},
+        el('div', { className: 'row-actions' }, [
+          action('🛡 الحماية', editGuardrails, 'تعديل حدود الإرسال وساعات الهدوء'),
+          action('💳 تفعيل', activateSubscription, 'تفعيل أو تجديد الاشتراك'),
+          subscription && subscription.status !== 'CANCELED'
+            ? action('✕ إلغاء', cancelSubscription, 'إلغاء الاشتراك')
+            : null,
+          action(
+            office.status === 'SUSPENDED' ? '▶ تفعيل المكتب' : '⏸ إيقاف',
+            toggleOfficeStatus,
+            office.status === 'SUSPENDED' ? 'إعادة تفعيل المكتب' : 'إيقاف خدمة المكتب',
+          ),
+        ]),
+      ),
     ]);
   })));
 }
 
+/** Converts a trial, or renews - the only control action that involves money. */
 async function activateSubscription(office) {
-  const months = Number(prompt(`تفعيل اشتراك «${office.name}» — كم شهراً؟`, '12'));
-  if (!Number.isFinite(months) || months < 1) return;
-  const priceSar = Number(prompt('قيمة الاشتراك بالريال؟', '3600'));
-  if (!Number.isFinite(priceSar) || priceSar < 0) return;
-  try {
-    await api(`/admin/offices/${office.id}/subscription/activate`, {
+  const values = await openModal({
+    title: `تفعيل اشتراك «${office.name}»`,
+    note: 'يبدأ الاشتراك من تاريخ انتهاء الفترة الحالية، فلا يخسر المكتب ما تبقّى له.',
+    confirmLabel: 'تفعيل',
+    fields: [
+      {
+        name: 'plan',
+        label: 'الخطة',
+        type: 'select',
+        value: 'BASIC',
+        options: [
+          { value: 'BASIC', label: 'أساسي' },
+          { value: 'PRO', label: 'احترافي' },
+        ],
+      },
+      { name: 'months', label: 'عدد الأشهر', type: 'number', value: 12, min: 1, max: 60 },
+      { name: 'priceSar', label: 'القيمة (ريال)', type: 'number', value: 3600, min: 0 },
+    ],
+  });
+  if (!values) return;
+  if (!values.months || values.months < 1) return modalError('عدد الأشهر غير صالح.');
+
+  await runControlAction(() =>
+    api(`/admin/offices/${office.id}/subscription/activate`, {
       method: 'POST',
-      body: JSON.stringify({ plan: 'BASIC', months, priceSar }),
-    });
+      body: JSON.stringify({
+        plan: values.plan,
+        months: values.months,
+        priceSar: values.priceSar ?? 0,
+      }),
+    }),
+  );
+}
+
+async function cancelSubscription(office) {
+  const values = await openModal({
+    title: `إلغاء اشتراك «${office.name}»`,
+    note: 'بيانات المكتب وعملاؤه تبقى كما هي؛ ما يتوقف هو إضافة العروض والإرسال.',
+    confirmLabel: 'إلغاء الاشتراك',
+    fields: [{ name: 'reason', label: 'السبب (اختياري)', placeholder: 'عدم السداد' }],
+  });
+  if (!values) return;
+  await runControlAction(() =>
+    api(`/admin/offices/${office.id}/subscription/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: values.reason || undefined }),
+    }),
+  );
+}
+
+/**
+ * Suspending an office stops it being served entirely - inbound messages are
+ * dropped and any queued broadcast stops dispatching.
+ */
+async function toggleOfficeStatus(office) {
+  const suspending = office.status !== 'SUSPENDED';
+  const values = await openModal({
+    title: suspending ? `إيقاف «${office.name}»` : `إعادة تفعيل «${office.name}»`,
+    note: suspending
+      ? 'سيتوقف البوت عن استقبال رسائل هذا المكتب، وسيتوقف أي إرسال قائم في منتصفه.'
+      : 'سيعود المكتب للعمل فوراً، وأي إرسال كان محتجزاً سيُستكمل.',
+    confirmLabel: suspending ? 'إيقاف' : 'تفعيل',
+    fields: [],
+  });
+  if (!values) return;
+  await runControlAction(() =>
+    api(`/admin/offices/${office.id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: suspending ? 'SUSPENDED' : 'ACTIVE' }),
+    }),
+  );
+}
+
+/** The guardrails that decide how hard an office may hit its customers. */
+async function editGuardrails(office) {
+  let settings;
+  try {
+    settings = await api(`/admin/offices/${office.id}/settings`);
+  } catch (failure) {
+    return banner(failure.message);
+  }
+
+  const values = await openModal({
+    title: `حماية «${office.name}»`,
+    note: 'هذه القيم تحدد كم يُزعج المكتب عملاءه — وبها يُحمى رقمه من الحظر.',
+    confirmLabel: 'حفظ',
+    fields: [
+      {
+        name: 'dailyCapPerLead',
+        label: 'أقصى إعلانات للعميل يومياً',
+        type: 'number',
+        value: settings.dailyCapPerLead,
+        min: 1,
+        max: 10,
+      },
+      {
+        name: 'minHoursBetweenMessages',
+        label: 'أقل فاصل بين رسالتين للعميل (ساعة)',
+        type: 'number',
+        value: settings.minHoursBetweenMessages,
+        min: 0,
+        max: 72,
+      },
+      {
+        name: 'quietHoursStart',
+        label: 'بداية ساعات الهدوء',
+        type: 'number',
+        value: settings.quietHoursStart,
+        min: 0,
+        max: 23,
+      },
+      {
+        name: 'quietHoursEnd',
+        label: 'نهاية ساعات الهدوء',
+        type: 'number',
+        value: settings.quietHoursEnd,
+        min: 0,
+        max: 24,
+      },
+      {
+        name: 'broadcastRatePerMinute',
+        label: 'رسائل في الدقيقة',
+        type: 'number',
+        value: settings.broadcastRatePerMinute,
+        min: 1,
+        max: 60,
+        hint: 'الأعلى يعني إرسالاً أسرع ومخاطرة أكبر على الرقم.',
+      },
+      {
+        name: 'autoSendLatestToNewLead',
+        label: 'إرسال «آخر الموجود» للعميل الجديد',
+        type: 'checkbox',
+        value: settings.autoSendLatestToNewLead,
+      },
+    ],
+  });
+  if (!values) return;
+
+  await runControlAction(() =>
+    api(`/admin/offices/${office.id}/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify(values),
+    }),
+  );
+}
+
+/** Every control action refreshes the table and the trail, or shows why not. */
+async function runControlAction(action) {
+  try {
+    await action();
     banner('');
     await renderOffices();
   } catch (failure) {
     banner(failure.message);
   }
 }
+
+async function onboardOffice(event) {
+  event.preventDefault();
+  const form = $('#onboard-form');
+  const payload = {};
+  for (const [key, raw] of new FormData(form).entries()) {
+    const value = String(raw).trim();
+    if (value) payload[key] = value;
+  }
+
+  const submit = form.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  try {
+    const office = await api('/offices', { method: 'POST', body: JSON.stringify(payload) });
+    form.reset();
+    form.hidden = true;
+    $('#toggle-onboard').setAttribute('aria-expanded', 'false');
+    $('#toggle-onboard').textContent = 'إظهار النموذج';
+    banner('');
+    await renderOffices();
+    banner(`تم ضمّ «${office.name}» وبدأت فترته المجانية.`);
+  } catch (failure) {
+    banner(failure.message);
+  } finally {
+    submit.disabled = false;
+  }
+}
+$('#onboard-form').addEventListener('submit', onboardOffice);
+$('#toggle-onboard').addEventListener('click', () => {
+  const form = $('#onboard-form');
+  form.hidden = !form.hidden;
+  const button = $('#toggle-onboard');
+  button.setAttribute('aria-expanded', String(!form.hidden));
+  button.textContent = form.hidden ? 'إظهار النموذج' : 'إخفاء النموذج';
+});
+
 $('#office-filter').addEventListener('input', drawOffices);
 
 async function searchProperties(event) {
@@ -382,12 +668,78 @@ async function renderInsights() {
   })), { note: 'يُحتسب العميل عند تسجيل بحثه، لا عند فتحه للمحادثة.' });
 }
 
+const AUDIT_LABELS = {
+  office_suspended: 'إيقاف مكتب',
+  office_status_changed: 'تغيير حالة مكتب',
+  office_settings_updated: 'تعديل الحماية',
+};
+
+/** The control trail. Without it, "who loosened this office's limits?" has no answer. */
+async function renderAudit() {
+  const rows = await api('/admin/audit?take=100');
+  const table = $('#audit-table');
+  table.replaceChildren();
+  table.append(
+    el(
+      'thead',
+      {},
+      el(
+        'tr',
+        {},
+        ['الوقت', 'الإجراء', 'المكتب', 'ما تغيّر'].map((title) => el('th', { textContent: title })),
+      ),
+    ),
+  );
+
+  if (!rows.length) {
+    table.append(
+      el(
+        'tbody',
+        {},
+        el('tr', {}, el('td', { colSpan: 4, className: 'empty', textContent: 'لا إجراءات مسجّلة بعد.' })),
+      ),
+    );
+    return;
+  }
+
+  const describe = (row) => {
+    const meta = row.meta ?? {};
+    if (meta.changed && Object.keys(meta.changed).length) {
+      return Object.entries(meta.changed)
+        .map(([key, change]) => `${key}: ${change.from} → ${change.to}`)
+        .join(' · ');
+    }
+    if (meta.from && meta.to) return `${meta.from} → ${meta.to}`;
+    return '—';
+  };
+
+  table.append(
+    el(
+      'tbody',
+      {},
+      rows.map((row) =>
+        el('tr', {}, [
+          el('td', {
+            className: 'num',
+            textContent: new Date(row.createdAt).toLocaleString('en-GB', { hour12: false }),
+          }),
+          el('td', { textContent: AUDIT_LABELS[row.action] ?? row.action }),
+          el('td', { className: 'wrap', textContent: row.officeName ?? '—' }),
+          el('td', { className: 'audit-meta', textContent: describe(row) }),
+        ]),
+      ),
+    ),
+  );
+}
+$('#refresh-audit').addEventListener('click', () => show('control'));
+
 // ── navigation ────────────────────────────────────────────────────────────
 const LOADERS = {
   overview: renderOverview,
   offices: renderOffices,
   properties: () => searchProperties(),
   insights: renderInsights,
+  control: renderAudit,
 };
 
 async function show(view) {

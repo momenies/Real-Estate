@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PropertyStatus } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
@@ -25,10 +26,16 @@ export class DraftFinalizerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ownerFlow: OwnerFlowService,
+    private readonly config?: ConfigService,
   ) {}
+
+  private get enabled(): boolean {
+    return this.config?.get<boolean>('workersEnabled') ?? true;
+  }
 
   @Cron(CronExpression.EVERY_10_SECONDS)
   async tick(): Promise<void> {
+    if (!this.enabled) return;
     if (this.running) return;
     this.running = true;
     try {
