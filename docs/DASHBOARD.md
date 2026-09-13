@@ -27,6 +27,40 @@ the authenticated API.
 | المكاتب | Every office: status, plan, days left, inventory and customer counts; converting a trial to a paid plan |
 | العقارات | Search inventory **across all offices** — the query no single office can run |
 | التحليلات | Supply by property type and city, demand by customer intent |
+| سجل التحكم | Who changed what, and what the value was before |
+
+## The control surface
+
+Everything the platform owner can actually *do*, not just see:
+
+| Action | Why it exists |
+|---|---|
+| Onboard an office | Creates the office, its guardrails, the owner's WhatsApp identity and the free trial in one transaction. Previously only possible with `curl`. |
+| Suspend / reactivate | Stops an office being served **entirely** — inbound messages dropped, any queued broadcast held mid-flight and resumed on reactivation. |
+| Tune guardrails | Daily cap, cooldown, quiet hours, send rate. The office's own endpoint is tenant-scoped, so the super admin — who belongs to no office — could read these but never change them. |
+| Activate / cancel a subscription | Activation extends from the current end date, so converting early costs the office nothing. |
+
+Two notes on how these are built:
+
+**Suspension had to be made real.** The bot already honoured
+`OfficeStatus.SUSPENDED` on inbound messages, but nothing in the system could
+ever set it, and the broadcast dispatcher never looked at office status at all.
+So suspending an office would have silenced its bot while its queued broadcast
+kept reaching customers. Both halves are closed, and
+`suspension.spec.ts` drives the real dispatcher to prove it.
+
+**The ranges are bounded in the API, not just the UI.** `dailyCapPerLead` caps
+at 10, `broadcastRatePerMinute` at 60. These decide how hard an office hits its
+customers, so the server refuses a value that would put its number at risk even
+if something else asked for it.
+
+## The control trail
+
+Every control action writes an `audit_logs` row with the actor, the office, and
+a **diff** — `dailyCapPerLead: 1 → 2`, not "settings changed". The table existed
+from the first migration and nothing wrote to it; control without a record is
+not control, and six months later the only honest answer to "who loosened this
+office's limits?" is a row written at the time.
 
 ## Design notes worth keeping
 
@@ -57,3 +91,7 @@ hover.
 
 Keep it dependency-free. The value of this page is that it deploys with the API
 and cannot drift from it.
+
+Control actions use `openModal()` rather than `window.prompt` — a prompt cannot
+show the current value, cannot validate, and cannot be cancelled safely, which
+is unacceptable for an action that charges money or stops an office.

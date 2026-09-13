@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { SubscriptionStatus } from '@prisma/client';
 import { SubscriptionsService } from './subscriptions.service';
@@ -22,10 +23,16 @@ export class SubscriptionsScheduler {
     private readonly subscriptions: SubscriptionsService,
     @Inject(forwardRef(() => WhatsappService))
     private readonly whatsapp: WhatsappService,
+    private readonly config?: ConfigService,
   ) {}
+
+  private get enabled(): boolean {
+    return this.config?.get<boolean>('workersEnabled') ?? true;
+  }
 
   @Cron(CronExpression.EVERY_DAY_AT_9AM)
   async run(): Promise<void> {
+    if (!this.enabled) return;
     try {
       await this.remindAndExpire();
     } catch (error) {

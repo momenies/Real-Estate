@@ -36,6 +36,7 @@
       <button role="tab" class="tab" data-view="offices" aria-selected="false">المكاتب</button>
       <button role="tab" class="tab" data-view="properties" aria-selected="false">العقارات</button>
       <button role="tab" class="tab" data-view="insights" aria-selected="false">التحليلات</button>
+      <button role="tab" class="tab" data-view="control" aria-selected="false">سجل التحكم</button>
     </nav>
     <div class="topbar-actions">
       <button id="theme-toggle" class="ghost" title="تبديل الوضع" aria-label="تبديل الوضع الفاتح والداكن">◐</button>
@@ -85,6 +86,25 @@
   <section class="view" id="view-offices" hidden>
     <section class="card">
       <div class="card-head">
+        <h2>ضمّ مكتب جديد</h2>
+        <button class="ghost" id="toggle-onboard" aria-expanded="false">إظهار النموذج</button>
+      </div>
+      <p class="card-note muted">
+        يُنشئ المكتب وإعدادات الحماية وهوية صاحبه على الواتساب والفترة المجانية في خطوة واحدة.
+      </p>
+      <form class="filters" id="onboard-form" hidden>
+        <label>اسم المكتب *<input name="name" required placeholder="مكتب الرياض للعقارات"></label>
+        <label>اسم صاحب المكتب *<input name="ownerName" required placeholder="أبو محمد"></label>
+        <label>جوال صاحب المكتب *<input name="ownerPhone" required placeholder="0501234567" inputmode="tel"></label>
+        <label>المدينة<input name="city" placeholder="الرياض"></label>
+        <label>Phone number ID *<input name="whatsappPhoneNumberId" required placeholder="من لوحة Meta"></label>
+        <label>الرقم المعروض<input name="whatsappDisplayNumber" placeholder="+966501234567"></label>
+        <button type="submit">ضمّ المكتب</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
         <h2>المكاتب</h2>
         <input id="office-filter" type="search" placeholder="بحث بالاسم أو المدينة">
       </div>
@@ -109,6 +129,20 @@
     </section>
   </section>
 
+  <!-- سجل التحكم -->
+  <section class="view" id="view-control" hidden>
+    <section class="card">
+      <div class="card-head">
+        <h2>سجل التحكم</h2>
+        <button class="ghost" id="refresh-audit">تحديث</button>
+      </div>
+      <p class="card-note muted">
+        كل إجراء تحكم مسجَّل هنا: الإيقاف، التفعيل، تعديل الحماية، والاشتراكات — بوقته وبما تغيّر فعلاً.
+      </p>
+      <div class="table-wrap"><table id="audit-table"></table></div>
+    </section>
+  </section>
+
   <!-- التحليلات -->
   <section class="view" id="view-insights" hidden>
     <div class="grid-2">
@@ -129,6 +163,19 @@
       <div class="chart" id="chart-intent"></div>
     </section>
   </section>
+</div>
+
+<div class="modal-backdrop" id="modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <h2 id="modal-title"></h2>
+    <p class="muted" id="modal-note"></p>
+    <form id="modal-form"></form>
+    <div class="modal-actions">
+      <button class="ghost" id="modal-cancel" type="button">إلغاء</button>
+      <button class="primary" id="modal-confirm" type="button">تأكيد</button>
+    </div>
+    <p class="error" id="modal-error" role="alert" hidden></p>
+  </div>
 </div>
 
 <div class="tooltip" id="tooltip" hidden></div>
