@@ -171,3 +171,42 @@ export const propertyCard = (params: {
   ];
   return lines.filter((line) => line !== null).join('\n');
 };
+
+/**
+ * Payload carried by the template's quick-reply button. Declared here rather
+ * than in the lead flow because the broadcast dispatcher stamps it onto the
+ * outgoing template and the lead flow reads it back - importing the flow into
+ * the dispatcher would close a module cycle.
+ */
+export const PROPERTY_REPLY_PREFIX = 'lead:property';
+
+/**
+ * Meta rejects a template parameter that contains a newline, a tab, or more
+ * than four consecutive spaces. Every value handed to `sendTemplate` passes
+ * through here, so a district typed with a line break by the owner cannot fail
+ * the whole broadcast.
+ */
+export const templateParam = (value: string): string => value.replace(/\s+/g, ' ').trim() || '-';
+
+/**
+ * The one-line form of a property, for the template body.
+ *
+ * `propertyCard` cannot be reused: it is deliberately multi-line, and a
+ * multi-line parameter is exactly what Meta refuses.
+ */
+export const propertyTeaser = (params: {
+  dealType: DealType;
+  propertyType: PropertyType;
+  district: string | null;
+  city: string | null;
+  areaSqm: number | null;
+  bedrooms: number | null;
+}): string => {
+  const parts = [
+    `${TYPE_LABELS[params.propertyType]} ${DEAL_LABELS[params.dealType]}`,
+    params.district ?? params.city,
+    params.areaSqm ? `${params.areaSqm} م²` : null,
+    params.bedrooms ? `${params.bedrooms} غرف` : null,
+  ].filter((part): part is string => !!part);
+  return templateParam(parts.join(' · '));
+};

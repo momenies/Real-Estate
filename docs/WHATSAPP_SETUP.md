@@ -1,7 +1,7 @@
 # Connecting WhatsApp
 
 Every office gets its own WhatsApp number. Inbound webhooks are routed to the
-right tenant by `phone_number_id`, so the number *is* the tenant key.
+right tenant by `phone_number_id`, so the number _is_ the tenant key.
 
 ## 1. Meta app
 
@@ -56,15 +56,83 @@ that is how the platform knows a message came from the **owner** rather than a
 customer. Get it wrong and the owner will be treated as a lead and offered the
 customer questionnaire.
 
-## 4. Message templates
+## 4. The broadcast template
 
-Free-form replies are only allowed within 24 hours of the customer's last
-message. To reach a customer who has been quiet longer, an approved template is
-required. Submit one in the Meta dashboard (category **Marketing**, Arabic) and
-send it with `WhatsappApiService.sendTemplate()`.
+This is not an optional nicety. Free-form messages - text, images, the property
+card - are only accepted within **24 hours of the customer's last message**.
+Past that Meta rejects the send with error **131047**.
 
-Within the 24-hour window - which covers replies and most broadcasts to recently
-active customers - plain messages are used.
+The headline feature is _"أرسلها لعملاء آخر شهر"_, and by construction most of
+that audience last wrote days or weeks ago. **Without an approved template, the
+broadcast reaches almost nobody.**
+
+### Submit this template
+
+`WhatsApp → Message Templates → Create template`
+
+| Field        | Value            |
+| ------------ | ---------------- |
+| **Name**     | `aqar_new_offer` |
+| **Category** | Marketing        |
+| **Language** | Arabic           |
+
+**Body** - three variables, each of which must stay on one line:
+
+```
+عرض جديد من {{1}} 🏡
+
+{{2}}
+السعر: {{3}}
+
+تحب نرسل لك الصور والتفاصيل والموقع؟
+```
+
+**Buttons** - Quick reply, in this order:
+
+| #   | Text            |
+| --- | --------------- |
+| 0   | `أرسل التفاصيل` |
+| 1   | `إيقاف العروض`  |
+
+Sample values for the review form (Meta rejects a submission with empty
+samples): `مكتب الرياض للعقارات` · `فيلا للبيع · النرجس · 400 م² · 5 غرف` ·
+`1,800,000 ريال`.
+
+Then set the name in `WHATSAPP_BROADCAST_TEMPLATE`, or per office in its
+settings from the dashboard.
+
+### How the platform uses it
+
+`BroadcastDispatcherService` decides per recipient, after anti-spam has decided
+_whether_ to send at all:
+
+| Customer's last message    | Channel                                          |
+| -------------------------- | ------------------------------------------------ |
+| under ~23.5 hours ago      | free-form: photo + full property card            |
+| older, template configured | `aqar_new_offer` with the three values filled in |
+| older, no template         | **skipped** as `OUTSIDE_24H_WINDOW`              |
+
+That last row is deliberate. Sending anyway would burn delivery attempts on a
+rejection the office owner never sees, and leave him believing the offer went
+out.
+
+**Button 0 carries the property's ref code** as its payload
+(`lead:property:FLB-002`), stamped on at send time. So the tap does two things
+at once: it is an inbound message, which reopens the 24-hour window, and it
+tells the bot which offer to send in full - photo, card and location. That
+round trip is why the teaser only needs three fields.
+
+Note the ~23.5 hours rather than 24: a recipient can wait minutes in the queue
+between the check and the send, and a send that lands a second past the
+boundary is rejected outright. The margin sends those leads by template
+instead, which always works.
+
+### Deduplication still applies
+
+The teaser and the details are the same property, and `property_deliveries`
+recorded it when the teaser went out - so no other broadcast will offer it
+again. The customer's own request for details is exempt: refusing them the
+thing they just asked for would be the rule working against its purpose.
 
 ## 5. Verifying the wiring
 

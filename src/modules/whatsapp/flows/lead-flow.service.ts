@@ -12,7 +12,7 @@ import { LeadsService } from '../../leads/leads.service';
 import { PropertiesService } from '../../properties/properties.service';
 import { AntiSpamService } from '../../broadcasts/anti-spam.service';
 import { ConversationService, ConversationState } from '../conversation.service';
-import { LEAD, TYPE_LABELS, propertyCard } from '../messages';
+import { LEAD, PROPERTY_REPLY_PREFIX, TYPE_LABELS, propertyCard } from '../messages';
 import { InboundMessage } from '../whatsapp.types';
 import { WhatsappApiService } from '../whatsapp-api.service';
 import { normalizeArabic } from '../../../common/utils/arabic.util';
@@ -23,6 +23,9 @@ export const LeadAction = {
   BUDGET: 'lead:budget',
   DISTRICT_ANY: 'lead:district:any',
   MORE: 'lead:more',
+  /// Tapped on the template that reached the customer outside the 24-hour
+  /// window; carries the ref code of the offer they want in full.
+  PROPERTY: PROPERTY_REPLY_PREFIX,
 } as const;
 
 const BUDGET_BANDS: Array<{ id: string; title: string; min: number | null; max: number | null }> = [
@@ -163,8 +166,83 @@ export class LeadFlowService {
       return;
     }
 
+    if (actionId.startsWith(`${LeadAction.PROPERTY}:`)) {
+      await this.sendRequestedProperty(
+        context,
+        lead,
+        actionId.slice(`${LeadAction.PROPERTY}:`.length),
+      );
+      return;
+    }
+
     if (actionId === LeadAction.MORE) {
       await this.sendMatches(context, lead, 5);
+    }
+  }
+
+  /**
+   * The customer tapped "أرسل التفاصيل" on the template teaser. That tap is an
+   * inbound message, so the 24-hour window is open again and the full card -
+   * photo, details, location - can be sent as free text.
+   *
+   * Deliberately not routed through the deduplication check: the teaser already
+   * recorded this property as delivered, and refusing the customer the details
+   * they just asked for would be the rule working against its own purpose.
+   */
+  private async sendRequestedProperty(
+    context: LeadContext,
+    lead: Lead,
+    refCode: string,
+  ): Promise<void> {
+    const phoneNumberId = context.office.whatsappPhoneNumberId ?? '';
+    const property = await this.properties.findByRefCode(context.office.id, refCode.trim());
+
+    if (!property) {
+      await this.whatsapp.sendText(
+        phoneNumberId,
+        context.message.from,
+        'العرض هذا ما عاد متوفر 🙏 بنرسل لك أقرب شيء مناسب.',
+      );
+      await this.leads.recordSearch(lead.id);
+      await this.sendMatches(context, lead, context.office.settings?.latestCount ?? 3);
+      return;
+    }
+
+    // Asking for a specific offer is the strongest search signal there is, and
+    // it is what keeps this customer inside "عملاء آخر شهر" next time.
+    await this.leads.recordSearch(lead.id);
+
+    const media = await this.properties.getMedia(property.id);
+    const cover = media.find((item) => item.type === MediaType.IMAGE && item.url);
+    const card = propertyCard({
+      refCode: property.refCode,
+      dealType: property.dealType,
+      propertyType: property.propertyType,
+      priceSar: property.priceSar,
+      district: property.district,
+      city: property.city,
+      areaSqm: property.areaSqm,
+      bedrooms: property.bedrooms,
+      bathrooms: property.bathrooms,
+      features: property.features,
+      officeName: context.office.name,
+      officePhone: context.office.whatsappDisplayNumber,
+    });
+
+    if (cover?.url) {
+      await this.whatsapp.sendImage(phoneNumberId, context.message.from, cover.url, card);
+    } else {
+      await this.whatsapp.sendText(phoneNumberId, context.message.from, card);
+    }
+
+    if (property.latitude !== null && property.longitude !== null) {
+      await this.whatsapp.sendLocation(
+        phoneNumberId,
+        context.message.from,
+        property.latitude,
+        property.longitude,
+        property.district ?? undefined,
+      );
     }
   }
 

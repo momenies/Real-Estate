@@ -14,6 +14,8 @@ export type OfficeSettingsPatch = Partial<
     | 'quietHoursStart'
     | 'quietHoursEnd'
     | 'broadcastRatePerMinute'
+    | 'broadcastTemplateName'
+    | 'broadcastTemplateLanguage'
     | 'autoSendLatestToNewLead'
     | 'latestCount'
     | 'draftWindowMinutes'

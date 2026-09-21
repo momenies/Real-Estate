@@ -26,11 +26,25 @@ const el = (tag, props = {}, children = []) => {
 
 // ── labels ────────────────────────────────────────────────────────────────
 const PROPERTY_TYPES = {
-  APARTMENT: 'شقة', VILLA: 'فيلا', LAND: 'أرض', BUILDING: 'عمارة', SHOP: 'محل',
-  OFFICE: 'مكتب', FARM: 'مزرعة', CHALET: 'شاليه', REST_HOUSE: 'استراحة', OTHER: 'عقار',
+  APARTMENT: 'شقة',
+  VILLA: 'فيلا',
+  LAND: 'أرض',
+  BUILDING: 'عمارة',
+  SHOP: 'محل',
+  OFFICE: 'مكتب',
+  FARM: 'مزرعة',
+  CHALET: 'شاليه',
+  REST_HOUSE: 'استراحة',
+  OTHER: 'عقار',
 };
 const DEAL_TYPES = { SALE: 'للبيع', RENT: 'للإيجار', INVESTMENT: 'استثمار', UNKNOWN: 'غير محدد' };
-const INTENTS = { BUY: 'شراء', RENT: 'إيجار', SELL: 'بيع', LEASE_OUT: 'تأجير', UNKNOWN: 'غير محدد' };
+const INTENTS = {
+  BUY: 'شراء',
+  RENT: 'إيجار',
+  SELL: 'بيع',
+  LEASE_OUT: 'تأجير',
+  UNKNOWN: 'غير محدد',
+};
 const PLANS = { TRIAL: 'تجريبي', BASIC: 'أساسي', PRO: 'احترافي' };
 const OFFICE_STATUS = { PENDING: 'قيد التفعيل', ACTIVE: 'نشط', SUSPENDED: 'موقوف' };
 
@@ -132,7 +146,9 @@ function openModal({ title, note, fields = [], confirmLabel = 'تأكيد' }) {
           input.type === 'checkbox'
             ? input.checked
             : input.type === 'number'
-              ? (input.value === '' ? null : Number(input.value))
+              ? input.value === ''
+                ? null
+                : Number(input.value)
               : input.value.trim();
       }
       close(data);
@@ -174,7 +190,10 @@ async function api(path, options = {}) {
 
 function banner(message) {
   const node = $('#banner');
-  if (!message) { node.hidden = true; return; }
+  if (!message) {
+    node.hidden = true;
+    return;
+  }
   node.textContent = message;
   node.hidden = false;
 }
@@ -218,9 +237,9 @@ const THEME_KEY = 'aqar.theme';
 const storedTheme = localStorage.getItem(THEME_KEY);
 if (storedTheme) document.documentElement.dataset.theme = storedTheme;
 $('#theme-toggle').addEventListener('click', () => {
-  const isDark = document.documentElement.dataset.theme === 'dark'
-    || (!document.documentElement.dataset.theme
-        && matchMedia('(prefers-color-scheme: dark)').matches);
+  const isDark =
+    document.documentElement.dataset.theme === 'dark' ||
+    (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
   const next = isDark ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
   localStorage.setItem(THEME_KEY, next);
@@ -237,7 +256,9 @@ function attachTooltip(node, html) {
     tooltip.style.left = `${Math.min(event.clientX + 14, innerWidth - tooltip.offsetWidth - 8)}px`;
     tooltip.style.top = `${event.clientY + 16}px`;
   });
-  node.addEventListener('mouseleave', () => { tooltip.hidden = true; });
+  node.addEventListener('mouseleave', () => {
+    tooltip.hidden = true;
+  });
 }
 
 /**
@@ -267,7 +288,10 @@ function renderBars(container, rows, { note } = {}) {
         ]),
       ]),
     ]);
-    attachTooltip(barRow, `${row.name}<br><b>${fmt(row.value)}</b>${row.tooltip ? `<br>${row.tooltip}` : ''}`);
+    attachTooltip(
+      barRow,
+      `${row.name}<br><b>${fmt(row.value)}</b>${row.tooltip ? `<br>${row.tooltip}` : ''}`,
+    );
     container.append(barRow);
   }
   if (note) container.append(el('div', { className: 'axis-note', textContent: note }));
@@ -281,8 +305,7 @@ async function renderOverview() {
   ]);
 
   $('#hero-leads').textContent = fmt(overview.leads);
-  $('#hero-note').textContent =
-    `${fmt(overview.activeLeadsLast30Days)} بحثوا خلال آخر ٣٠ يوماً`;
+  $('#hero-note').textContent = `${fmt(overview.activeLeadsLast30Days)} بحثوا خلال آخر ٣٠ يوماً`;
 
   const tiles = [
     ['المكاتب', overview.offices],
@@ -305,38 +328,57 @@ async function renderOverview() {
   if (!statuses.length) {
     subs.append(el('p', { className: 'empty', textContent: 'لا توجد اشتراكات بعد.' }));
   } else {
-    subs.append(el('div', { className: 'status-rows' },
-      statuses.map(([key, count]) =>
-        el('div', { className: 'status-row' }, [
-          statusChip(key),
-          el('strong', { textContent: fmt(count) }),
-        ]),
+    subs.append(
+      el(
+        'div',
+        { className: 'status-rows' },
+        statuses.map(([key, count]) =>
+          el('div', { className: 'status-row' }, [
+            statusChip(key),
+            el('strong', { textContent: fmt(count) }),
+          ]),
+        ),
       ),
-    ));
+    );
   }
 
   const expiringNode = $('#expiring');
   expiringNode.replaceChildren();
   if (!expiring.length) {
-    expiringNode.append(el('p', { className: 'empty', textContent: 'لا شيء ينتهي في هذه الفترة.' }));
+    expiringNode.append(
+      el('p', { className: 'empty', textContent: 'لا شيء ينتهي في هذه الفترة.' }),
+    );
   } else {
     const table = el('table');
-    table.append(el('thead', {}, el('tr', {}, [
-      el('th', { textContent: 'المكتب' }),
-      el('th', { textContent: 'الحالة' }),
-      el('th', { textContent: 'يتبقى' }),
-    ])));
-    table.append(el('tbody', {}, expiring.map((subscription) => {
-      const end = subscription.status === 'TRIALING'
-        ? subscription.trialEndsAt
-        : (subscription.currentPeriodEnd ?? subscription.trialEndsAt);
-      const left = daysUntil(end);
-      return el('tr', {}, [
-        el('td', { className: 'wrap', textContent: subscription.office?.name ?? '—' }),
-        el('td', {}, statusChip(subscription.status)),
-        el('td', { className: 'num', textContent: left === null ? '—' : `${left} يوم` }),
-      ]);
-    })));
+    table.append(
+      el(
+        'thead',
+        {},
+        el('tr', {}, [
+          el('th', { textContent: 'المكتب' }),
+          el('th', { textContent: 'الحالة' }),
+          el('th', { textContent: 'يتبقى' }),
+        ]),
+      ),
+    );
+    table.append(
+      el(
+        'tbody',
+        {},
+        expiring.map((subscription) => {
+          const end =
+            subscription.status === 'TRIALING'
+              ? subscription.trialEndsAt
+              : (subscription.currentPeriodEnd ?? subscription.trialEndsAt);
+          const left = daysUntil(end);
+          return el('tr', {}, [
+            el('td', { className: 'wrap', textContent: subscription.office?.name ?? '—' }),
+            el('td', {}, statusChip(subscription.status)),
+            el('td', { className: 'num', textContent: left === null ? '—' : `${left} يوم` }),
+          ]);
+        }),
+      ),
+    );
     expiringNode.append(table);
   }
 }
@@ -353,64 +395,102 @@ async function renderOffices() {
 
 function drawOffices() {
   const needle = $('#office-filter').value.trim();
-  const rows = state.offices.filter((office) =>
-    !needle || office.name.includes(needle) || (office.city ?? '').includes(needle));
+  const rows = state.offices.filter(
+    (office) => !needle || office.name.includes(needle) || (office.city ?? '').includes(needle),
+  );
 
   const table = $('#offices-table');
   table.replaceChildren();
-  table.append(el('thead', {}, el('tr', {}, [
-    'المكتب', 'المدينة', 'الحالة', 'الاشتراك', 'يتبقى', 'عقارات', 'عملاء', 'حملات', '',
-  ].map((title) => el('th', { textContent: title })))));
+  table.append(
+    el(
+      'thead',
+      {},
+      el(
+        'tr',
+        {},
+        ['المكتب', 'المدينة', 'الحالة', 'الاشتراك', 'يتبقى', 'عقارات', 'عملاء', 'حملات', ''].map(
+          (title) => el('th', { textContent: title }),
+        ),
+      ),
+    ),
+  );
 
   if (!rows.length) {
-    table.append(el('tbody', {}, el('tr', {}, el('td', { colSpan: 9, className: 'empty', textContent: 'لا توجد مكاتب مطابقة.' }))));
+    table.append(
+      el(
+        'tbody',
+        {},
+        el(
+          'tr',
+          {},
+          el('td', { colSpan: 9, className: 'empty', textContent: 'لا توجد مكاتب مطابقة.' }),
+        ),
+      ),
+    );
     return;
   }
 
-  table.append(el('tbody', {}, rows.map((office) => {
-    const subscription = office.subscription;
-    const end = subscription
-      ? (subscription.status === 'TRIALING'
-          ? subscription.trialEndsAt
-          : (subscription.currentPeriodEnd ?? subscription.trialEndsAt))
-      : null;
-    const left = daysUntil(end);
+  table.append(
+    el(
+      'tbody',
+      {},
+      rows.map((office) => {
+        const subscription = office.subscription;
+        const end = subscription
+          ? subscription.status === 'TRIALING'
+            ? subscription.trialEndsAt
+            : (subscription.currentPeriodEnd ?? subscription.trialEndsAt)
+          : null;
+        const left = daysUntil(end);
 
-    const action = (label, handler, title) => {
-      const button = el('button', { className: 'ghost', textContent: label, title: title ?? label });
-      button.addEventListener('click', () => handler(office));
-      return button;
-    };
+        const action = (label, handler, title) => {
+          const button = el('button', {
+            className: 'ghost',
+            textContent: label,
+            title: title ?? label,
+          });
+          button.addEventListener('click', () => handler(office));
+          return button;
+        };
 
-    return el('tr', { dataset: { officeStatus: office.status } }, [
-      el('td', { className: 'wrap', textContent: office.name }),
-      el('td', { textContent: office.city ?? '—' }),
-      el('td', { textContent: OFFICE_STATUS[office.status] ?? office.status }),
-      el('td', {}, subscription
-        ? el('span', {}, [statusChip(subscription.status), ` · ${PLANS[subscription.plan] ?? subscription.plan}`])
-        : '—'),
-      el('td', { className: 'num', textContent: left === null ? '—' : `${left} يوم` }),
-      el('td', { className: 'num', textContent: fmt(office._count?.properties) }),
-      el('td', { className: 'num', textContent: fmt(office._count?.leads) }),
-      el('td', { className: 'num', textContent: fmt(office._count?.broadcasts) }),
-      el(
-        'td',
-        {},
-        el('div', { className: 'row-actions' }, [
-          action('🛡 الحماية', editGuardrails, 'تعديل حدود الإرسال وساعات الهدوء'),
-          action('💳 تفعيل', activateSubscription, 'تفعيل أو تجديد الاشتراك'),
-          subscription && subscription.status !== 'CANCELED'
-            ? action('✕ إلغاء', cancelSubscription, 'إلغاء الاشتراك')
-            : null,
-          action(
-            office.status === 'SUSPENDED' ? '▶ تفعيل المكتب' : '⏸ إيقاف',
-            toggleOfficeStatus,
-            office.status === 'SUSPENDED' ? 'إعادة تفعيل المكتب' : 'إيقاف خدمة المكتب',
+        return el('tr', { dataset: { officeStatus: office.status } }, [
+          el('td', { className: 'wrap', textContent: office.name }),
+          el('td', { textContent: office.city ?? '—' }),
+          el('td', { textContent: OFFICE_STATUS[office.status] ?? office.status }),
+          el(
+            'td',
+            {},
+            subscription
+              ? el('span', {}, [
+                  statusChip(subscription.status),
+                  ` · ${PLANS[subscription.plan] ?? subscription.plan}`,
+                ])
+              : '—',
           ),
-        ]),
-      ),
-    ]);
-  })));
+          el('td', { className: 'num', textContent: left === null ? '—' : `${left} يوم` }),
+          el('td', { className: 'num', textContent: fmt(office._count?.properties) }),
+          el('td', { className: 'num', textContent: fmt(office._count?.leads) }),
+          el('td', { className: 'num', textContent: fmt(office._count?.broadcasts) }),
+          el(
+            'td',
+            {},
+            el('div', { className: 'row-actions' }, [
+              action('🛡 الحماية', editGuardrails, 'تعديل حدود الإرسال وساعات الهدوء'),
+              action('💳 تفعيل', activateSubscription, 'تفعيل أو تجديد الاشتراك'),
+              subscription && subscription.status !== 'CANCELED'
+                ? action('✕ إلغاء', cancelSubscription, 'إلغاء الاشتراك')
+                : null,
+              action(
+                office.status === 'SUSPENDED' ? '▶ تفعيل المكتب' : '⏸ إيقاف',
+                toggleOfficeStatus,
+                office.status === 'SUSPENDED' ? 'إعادة تفعيل المكتب' : 'إيقاف خدمة المكتب',
+              ),
+            ]),
+          ),
+        ]);
+      }),
+    ),
+  );
 }
 
 /** Converts a trial, or renews - the only control action that involves money. */
@@ -549,6 +629,14 @@ async function editGuardrails(office) {
         type: 'checkbox',
         value: settings.autoSendLatestToNewLead,
       },
+      {
+        name: 'broadcastTemplateName',
+        label: 'قالب الرسالة المعتمد',
+        type: 'text',
+        value: settings.broadcastTemplateName ?? '',
+        placeholder: 'aqar_new_offer',
+        hint: 'يُستخدم للعميل الذي مضى على رسالته أكثر من ٢٤ ساعة. اتركه فارغاً لقالب المنصة.',
+      },
     ],
   });
   if (!values) return;
@@ -621,51 +709,97 @@ async function searchProperties(event) {
   }
 
   const table = $('#properties-table');
-  table.replaceChildren(el('tbody', {}, el('tr', {}, el('td', { className: 'empty', textContent: 'جارٍ البحث…' }))));
+  table.replaceChildren(
+    el('tbody', {}, el('tr', {}, el('td', { className: 'empty', textContent: 'جارٍ البحث…' }))),
+  );
 
-  const rows = await api('/admin/properties/search', { method: 'POST', body: JSON.stringify(payload) });
+  const rows = await api('/admin/properties/search', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
   table.replaceChildren();
-  table.append(el('thead', {}, el('tr', {}, [
-    'رقم العرض', 'المكتب', 'النوع', 'الحي', 'المدينة', 'السعر', 'المساحة', 'الغرف',
-  ].map((title) => el('th', { textContent: title })))));
+  table.append(
+    el(
+      'thead',
+      {},
+      el(
+        'tr',
+        {},
+        ['رقم العرض', 'المكتب', 'النوع', 'الحي', 'المدينة', 'السعر', 'المساحة', 'الغرف'].map(
+          (title) => el('th', { textContent: title }),
+        ),
+      ),
+    ),
+  );
 
   if (!rows.length) {
-    table.append(el('tbody', {}, el('tr', {}, el('td', { colSpan: 8, className: 'empty', textContent: 'لا توجد نتائج.' }))));
+    table.append(
+      el(
+        'tbody',
+        {},
+        el('tr', {}, el('td', { colSpan: 8, className: 'empty', textContent: 'لا توجد نتائج.' })),
+      ),
+    );
     return;
   }
 
-  table.append(el('tbody', {}, rows.map((property) => el('tr', {}, [
-    el('td', { textContent: property.refCode }),
-    el('td', { className: 'wrap', textContent: property.office?.name ?? '—' }),
-    el('td', { textContent: `${PROPERTY_TYPES[property.propertyType] ?? property.propertyType} ${DEAL_TYPES[property.dealType] ?? ''}`.trim() }),
-    el('td', { textContent: property.district ?? '—' }),
-    el('td', { textContent: property.city ?? '—' }),
-    el('td', { className: 'num', textContent: sar(property.priceSar) }),
-    el('td', { className: 'num', textContent: property.areaSqm ? `${fmt(property.areaSqm)} م²` : '—' }),
-    el('td', { className: 'num', textContent: fmt(property.bedrooms) }),
-  ]))));
+  table.append(
+    el(
+      'tbody',
+      {},
+      rows.map((property) =>
+        el('tr', {}, [
+          el('td', { textContent: property.refCode }),
+          el('td', { className: 'wrap', textContent: property.office?.name ?? '—' }),
+          el('td', {
+            textContent:
+              `${PROPERTY_TYPES[property.propertyType] ?? property.propertyType} ${DEAL_TYPES[property.dealType] ?? ''}`.trim(),
+          }),
+          el('td', { textContent: property.district ?? '—' }),
+          el('td', { textContent: property.city ?? '—' }),
+          el('td', { className: 'num', textContent: sar(property.priceSar) }),
+          el('td', {
+            className: 'num',
+            textContent: property.areaSqm ? `${fmt(property.areaSqm)} م²` : '—',
+          }),
+          el('td', { className: 'num', textContent: fmt(property.bedrooms) }),
+        ]),
+      ),
+    ),
+  );
 }
 $('#property-filters').addEventListener('submit', searchProperties);
 
 async function renderInsights() {
   const insights = await api('/admin/insights');
 
-  renderBars($('#chart-type'), insights.supplyByPropertyType.map((row) => ({
-    name: PROPERTY_TYPES[row.propertyType] ?? row.propertyType,
-    value: row.count,
-    sub: row.averagePriceSar ? `${nf.format(row.averagePriceSar)} ريال` : null,
-    tooltip: row.averagePriceSar ? `متوسط السعر: ${sar(row.averagePriceSar)}` : null,
-  })), { note: 'العدد هو عروض منشورة؛ الرقم الصغير هو متوسط السعر.' });
+  renderBars(
+    $('#chart-type'),
+    insights.supplyByPropertyType.map((row) => ({
+      name: PROPERTY_TYPES[row.propertyType] ?? row.propertyType,
+      value: row.count,
+      sub: row.averagePriceSar ? `${nf.format(row.averagePriceSar)} ريال` : null,
+      tooltip: row.averagePriceSar ? `متوسط السعر: ${sar(row.averagePriceSar)}` : null,
+    })),
+    { note: 'العدد هو عروض منشورة؛ الرقم الصغير هو متوسط السعر.' },
+  );
 
-  renderBars($('#chart-city'), insights.supplyByCity.map((row) => ({
-    name: row.city ?? 'غير محددة',
-    value: row.count,
-  })));
+  renderBars(
+    $('#chart-city'),
+    insights.supplyByCity.map((row) => ({
+      name: row.city ?? 'غير محددة',
+      value: row.count,
+    })),
+  );
 
-  renderBars($('#chart-intent'), insights.demandByIntentLast30Days.map((row) => ({
-    name: INTENTS[row.intent] ?? row.intent,
-    value: row.count,
-  })), { note: 'يُحتسب العميل عند تسجيل بحثه، لا عند فتحه للمحادثة.' });
+  renderBars(
+    $('#chart-intent'),
+    insights.demandByIntentLast30Days.map((row) => ({
+      name: INTENTS[row.intent] ?? row.intent,
+      value: row.count,
+    })),
+    { note: 'يُحتسب العميل عند تسجيل بحثه، لا عند فتحه للمحادثة.' },
+  );
 }
 
 const AUDIT_LABELS = {
@@ -696,7 +830,11 @@ async function renderAudit() {
       el(
         'tbody',
         {},
-        el('tr', {}, el('td', { colSpan: 4, className: 'empty', textContent: 'لا إجراءات مسجّلة بعد.' })),
+        el(
+          'tr',
+          {},
+          el('td', { colSpan: 4, className: 'empty', textContent: 'لا إجراءات مسجّلة بعد.' }),
+        ),
       ),
     );
     return;

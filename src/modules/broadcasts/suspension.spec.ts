@@ -62,7 +62,15 @@ describeWithDb('broadcast dispatcher respects suspension', () => {
       data: { officeId: OFFICE, refCode: 'SUS-1', status: 'PUBLISHED', district: 'النرجس' },
     });
     const lead = await base.lead.create({
-      data: { officeId: OFFICE, waId: LEAD_WA_ID, lastSearchAt: new Date() },
+      data: {
+        officeId: OFFICE,
+        waId: LEAD_WA_ID,
+        lastSearchAt: new Date(),
+        // Inside Meta's 24-hour window, so this suite tests office status and
+        // nothing else. Without it the lead is template-only and the send is
+        // skipped for a reason that has nothing to do with suspension.
+        lastMessageAt: new Date(),
+      },
     });
     const broadcast = await base.broadcast.create({
       data: {

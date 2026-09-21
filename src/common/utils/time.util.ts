@@ -54,3 +54,26 @@ export function hoursSince(date: Date | null | undefined, now: Date = new Date()
   if (!date) return Number.POSITIVE_INFINITY;
   return (now.getTime() - date.getTime()) / 3_600_000;
 }
+
+/**
+ * Meta's customer-service window. Free-form messages - text, images, the
+ * property card - are only accepted within 24 hours of the customer's last
+ * inbound message; past it Meta rejects the send with error 131047 and only an
+ * approved template gets through.
+ */
+export const SERVICE_WINDOW_HOURS = 24;
+
+/**
+ * A recipient can sit in the broadcast queue for minutes between this check and
+ * the actual send, and a send that lands a second past the boundary is rejected
+ * outright. The margin buys that slack: a lead close to the edge is reached by
+ * template instead, which always works.
+ */
+export function isWithinServiceWindow(
+  lastInboundAt: Date | null | undefined,
+  now: Date = new Date(),
+  marginMinutes = 30,
+): boolean {
+  if (!lastInboundAt) return false;
+  return hoursSince(lastInboundAt, now) < SERVICE_WINDOW_HOURS - marginMinutes / 60;
+}
