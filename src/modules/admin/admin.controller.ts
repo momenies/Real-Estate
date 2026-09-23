@@ -1,7 +1,16 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { OfficeStatus, PlanCode, UserRole } from '@prisma/client';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { AdminService } from './admin.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { Roles } from '../../common/decorators';
@@ -32,6 +41,9 @@ class UpdateOfficeSettingsDto {
   @IsOptional() @IsInt() @Min(1) @Max(10) latestCount?: number;
   @IsOptional() @IsInt() @Min(1) @Max(240) draftWindowMinutes?: number;
   @IsOptional() @IsString() defaultCity?: string;
+  /// Approved Meta template for reaching a lead outside the 24-hour window.
+  @IsOptional() @IsString() @MaxLength(512) broadcastTemplateName?: string;
+  @IsOptional() @IsString() @MaxLength(8) broadcastTemplateLanguage?: string;
 }
 
 class SearchDto {

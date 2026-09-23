@@ -59,14 +59,19 @@ export class AdminService {
     const before = await this.prisma.officeSettings.findUnique({ where: { officeId } });
     if (!before) throw new NotFoundException(`Office ${officeId} has no settings row`);
 
-    const updated = await this.prisma.officeSettings.update({
-      where: { officeId },
-      data: patch,
-    });
+    // The dashboard sends "" for a text field the operator cleared. Stored
+    // verbatim it would read as "this office has a template named nothing";
+    // NULL is what "fall back to the platform default" is spelled as.
+    const data: OfficeSettingsPatch = {
+      ...patch,
+      ...(patch.broadcastTemplateName === '' ? { broadcastTemplateName: null } : {}),
+    };
+
+    const updated = await this.prisma.officeSettings.update({ where: { officeId }, data });
 
     // Record only what actually changed, so the trail reads as a diff.
     const changed = Object.fromEntries(
-      Object.entries(patch)
+      Object.entries(data)
         .filter(
           ([key, value]) =>
             value !== undefined && (before as Record<string, unknown>)[key] !== value,

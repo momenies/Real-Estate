@@ -17,6 +17,8 @@ export interface AppConfig {
     apiVersion: string;
     graphBaseUrl: string;
     defaultPhoneNumberId: string;
+    broadcastTemplate: string;
+    broadcastTemplateLanguage: string;
   };
   storage: {
     provider: 'supabase' | 'none';
@@ -59,6 +61,12 @@ export default (): AppConfig => ({
     apiVersion: process.env.WHATSAPP_API_VERSION ?? 'v21.0',
     graphBaseUrl: process.env.WHATSAPP_GRAPH_BASE_URL ?? 'https://graph.facebook.com',
     defaultPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? '',
+    // Platform-wide fallback template for reaching a customer whose last
+    // message is older than 24 hours. An office may override it in its
+    // settings; with neither, those recipients are skipped rather than sent a
+    // free-form message Meta would reject with error 131047.
+    broadcastTemplate: process.env.WHATSAPP_BROADCAST_TEMPLATE ?? '',
+    broadcastTemplateLanguage: process.env.WHATSAPP_BROADCAST_TEMPLATE_LANG ?? 'ar',
   },
   storage: {
     provider: (process.env.STORAGE_PROVIDER as 'supabase' | 'none') ?? 'none',

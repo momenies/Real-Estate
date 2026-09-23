@@ -10,20 +10,32 @@ means losing the business.
 `AntiSpamService.check()` evaluates these for every (customer, property) pair.
 The order is deliberate and load-bearing.
 
-| # | Rule | Skip reason | Why |
-|---|---|---|---|
-| 1 | Customer opted out | `OPTED_OUT` | Absolute. Nothing overrides it. |
-| 2 | Already received **this property** | `ALREADY_RECEIVED_PROPERTY` | The most visible form of spam, and the easiest to prevent. |
-| 3 | Daily cap reached | `DAILY_CAP_REACHED` | Default: one promotional message per customer per day. |
-| 4 | Cooldown active | `COOLDOWN_ACTIVE` | Default: 20 hours between messages to the same customer. |
-| 5 | Quiet hours | `QUIET_HOURS` | Default: 22:00–08:00 in the office's timezone. |
+| #   | Rule                               | Skip reason                 | Why                                                        |
+| --- | ---------------------------------- | --------------------------- | ---------------------------------------------------------- |
+| 1   | Customer opted out                 | `OPTED_OUT`                 | Absolute. Nothing overrides it.                            |
+| 2   | Already received **this property** | `ALREADY_RECEIVED_PROPERTY` | The most visible form of spam, and the easiest to prevent. |
+| 3   | Daily cap reached                  | `DAILY_CAP_REACHED`         | Default: one promotional message per customer per day.     |
+| 4   | Cooldown active                    | `COOLDOWN_ACTIVE`           | Default: 20 hours between messages to the same customer.   |
+| 5   | Quiet hours                        | `QUIET_HOURS`               | Default: 22:00–08:00 in the office's timezone.             |
 
-**Why quiet hours is last.** Rules 1–4 answer *"should this customer ever get
-this message?"*. Quiet hours only answers *"is now a good time?"*. If quiet
+**Why quiet hours is last.** Rules 1–4 answer _"should this customer ever get
+this message?"_. Quiet hours only answers _"is now a good time?"_. If quiet
 hours were checked first, a duplicate would be reported as a mere deferral, and
 the caller would queue a message it should have dropped. That was a real bug;
 `anti-spam.service.spec.ts` has a regression test named
-*"reports a duplicate as a duplicate even during quiet hours"*.
+_"reports a duplicate as a duplicate even during quiet hours"_.
+
+### `OUTSIDE_24H_WINDOW` is not one of these rules
+
+It sits after them, and it answers a different question. Rules 1-5 decide
+_whether_ a customer should get this offer; the window decides _how_ it can be
+delivered. A customer who last wrote three weeks ago is eligible in every way
+that matters and still cannot be sent a free-form message - only an approved
+template reaches them (see [WHATSAPP_SETUP.md](WHATSAPP_SETUP.md)).
+
+The skip reason is therefore recorded only when no template is configured at
+all. It means "this one was allowed but unreachable", never "this one was too
+much".
 
 Consequently `BroadcastsService.plan()` treats `QUIET_HOURS` as **deferrable** -
 those recipients stay `PENDING` and go out when the window opens - while every
@@ -32,7 +44,7 @@ other reason produces a `SKIPPED` row.
 ## How deduplication is guaranteed
 
 `property_deliveries` has a unique constraint on `(propertyId, leadId)`. It is
-the single ledger for *every* path that can reach a customer:
+the single ledger for _every_ path that can reach a customer:
 
 - a broadcast the owner triggered
 - the automatic "آخر الموجود" sent to a newly qualified customer
@@ -54,7 +66,7 @@ not have its daily cap reset at 3 a.m. local time.
 
 ## Checked twice
 
-Rules are evaluated when the broadcast is planned *and* again immediately before
+Rules are evaluated when the broadcast is planned _and_ again immediately before
 each individual send. The gap between the two can be minutes, and another
 broadcast may have reached that customer in between.
 
@@ -74,12 +86,12 @@ and the cheapest insurance against being reported.
 
 Via `PATCH /api/offices/me/settings`, within bounded ranges:
 
-| Setting | Default | Range |
-|---|---|---|
-| `dailyCapPerLead` | 1 | 1–10 |
-| `minHoursBetweenMessages` | 20 | 0–72 |
-| `quietHoursStart` / `quietHoursEnd` | 22 / 8 | 0–23 / 0–24 |
-| `broadcastRatePerMinute` | 20 | 1–60 |
+| Setting                             | Default | Range       |
+| ----------------------------------- | ------- | ----------- |
+| `dailyCapPerLead`                   | 1       | 1–10        |
+| `minHoursBetweenMessages`           | 20      | 0–72        |
+| `quietHoursStart` / `quietHoursEnd` | 22 / 8  | 0–23 / 0–24 |
+| `broadcastRatePerMinute`            | 20      | 1–60        |
 
 Deduplication is **not** tunable. There is no configuration that lets an office
 send the same property to the same customer twice.

@@ -215,6 +215,14 @@ model OfficeSettings {
   /// Messages per minute per office - protects the number from Meta throttling.
   broadcastRatePerMinute  Int @default(20)
 
+  // --- outside Meta's 24-hour service window ---
+  /// Approved Meta template used to reach a customer whose last message is
+  /// older than 24 hours. NULL falls back to WHATSAPP_BROADCAST_TEMPLATE; with
+  /// neither, such a recipient is skipped as OUTSIDE_24H_WINDOW rather than
+  /// sent a free-form message Meta would reject.
+  broadcastTemplateName     String?
+  broadcastTemplateLanguage String  @default("ar")
+
   // --- lead onboarding ---
   autoSendLatestToNewLead Boolean @default(true)
   latestCount             Int     @default(3)

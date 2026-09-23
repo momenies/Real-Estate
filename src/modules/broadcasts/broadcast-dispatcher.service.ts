@@ -3,16 +3,25 @@ import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   BroadcastStatus,
+  DealType,
   DeliveryStatus,
   MediaType,
   OfficeStatus,
+  PropertyType,
   SkipReason,
 } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { TenantStore } from '../../common/tenancy/tenant-context';
-import { isWithinQuietHours } from '../../common/utils/time.util';
-import { LEAD, propertyCard } from '../whatsapp/messages';
-import { WhatsappApiService } from '../whatsapp/whatsapp-api.service';
+import { isWithinQuietHours, isWithinServiceWindow } from '../../common/utils/time.util';
+import {
+  LEAD,
+  PROPERTY_REPLY_PREFIX,
+  formatSar,
+  propertyCard,
+  propertyTeaser,
+  templateParam,
+} from '../whatsapp/messages';
+import { SendResult, WhatsappApiService } from '../whatsapp/whatsapp-api.service';
 import { AntiSpamService } from './anti-spam.service';
 
 /**
@@ -139,18 +148,33 @@ export class BroadcastDispatcherService {
             continue;
           }
 
-          const result = cover?.url
-            ? await this.whatsapp.sendImage(
-                office.whatsappPhoneNumberId!,
-                recipient.lead.waId,
-                cover.url,
-                body,
-              )
-            : await this.whatsapp.sendText(
-                office.whatsappPhoneNumberId!,
-                recipient.lead.waId,
-                body,
-              );
+          // The rule that decides HOW to send, after anti-spam has decided
+          // WHETHER to. A customer who searched three weeks ago - precisely the
+          // audience of "أرسلها لعملاء آخر شهر" - is outside Meta's 24-hour
+          // window, and a free-form send to them fails with error 131047. Only
+          // an approved template reaches them.
+          const result = isWithinServiceWindow(recipient.lead.lastMessageAt)
+            ? cover?.url
+              ? await this.whatsapp.sendImage(
+                  office.whatsappPhoneNumberId!,
+                  recipient.lead.waId,
+                  cover.url,
+                  body,
+                )
+              : await this.whatsapp.sendText(
+                  office.whatsappPhoneNumberId!,
+                  recipient.lead.waId,
+                  body,
+                )
+            : await this.sendOutsideWindow(broadcast, office, settings, recipient.lead.waId);
+
+          if (result === null) {
+            // No template configured: skipping is the honest outcome. Sending
+            // anyway would burn an attempt, log a Meta error, and still deliver
+            // nothing - and the owner would believe the offer went out.
+            await this.markSkipped(recipient.id, SkipReason.OUTSIDE_24H_WINDOW);
+            continue;
+          }
 
           if (result.ok) {
             await this.prisma.tenant.broadcastRecipient.update({
@@ -195,6 +219,66 @@ export class BroadcastDispatcherService {
         }
       });
     }
+  }
+
+  /**
+   * Reaches a customer whose service window has closed, using the office's
+   * approved template. Returns null when no template is configured, which the
+   * caller records as OUTSIDE_24H_WINDOW.
+   *
+   * The quick-reply button carries the property's ref code, so the customer's
+   * tap both reopens the 24-hour window and tells the bot which offer to send
+   * in full - photo, card and location.
+   */
+  private async sendOutsideWindow(
+    broadcast: {
+      property: {
+        refCode: string;
+        dealType: DealType;
+        propertyType: PropertyType;
+        priceSar: number | null;
+        district: string | null;
+        city: string | null;
+        areaSqm: number | null;
+        bedrooms: number | null;
+      };
+    },
+    office: { name: string; whatsappPhoneNumberId: string | null },
+    settings: { broadcastTemplateName: string | null; broadcastTemplateLanguage: string },
+    waId: string,
+  ): Promise<SendResult | null> {
+    // `||`, not `??`: an office whose template field was cleared in the
+    // dashboard holds an empty string, and that should fall through to the
+    // platform default rather than disable templates for that office alone.
+    const templateName =
+      settings.broadcastTemplateName ||
+      this.config?.get<string>('whatsapp.broadcastTemplate') ||
+      '';
+    if (!templateName) return null;
+
+    const language =
+      settings.broadcastTemplateLanguage ||
+      this.config?.get<string>('whatsapp.broadcastTemplateLanguage') ||
+      'ar';
+
+    return this.whatsapp.sendTemplate(office.whatsappPhoneNumberId!, waId, templateName, language, [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: templateParam(office.name) },
+          { type: 'text', text: propertyTeaser(broadcast.property) },
+          { type: 'text', text: templateParam(formatSar(broadcast.property.priceSar)) },
+        ],
+      },
+      {
+        type: 'button',
+        sub_type: 'quick_reply',
+        index: '0',
+        parameters: [
+          { type: 'payload', payload: `${PROPERTY_REPLY_PREFIX}:${broadcast.property.refCode}` },
+        ],
+      },
+    ]);
   }
 
   private async markSkipped(recipientId: string, reason: SkipReason): Promise<void> {
